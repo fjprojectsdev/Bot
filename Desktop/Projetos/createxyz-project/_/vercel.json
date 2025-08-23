@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "cd apps/web && npm install && npm run build",
+  "outputDirectory": "apps/web/build/client",
+  "installCommand": "cd apps/web && npm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
