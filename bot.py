@@ -662,7 +662,7 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     
     # Eventos automáticos a cada 3 horas
-    # app.job_queue.run_repeating(evento_automatico, interval=10800, first=10)
+    app.job_queue.run_repeating(evento_automatico, interval=10800, first=10)
     
     # Ajuda
     app.add_handler(CommandHandler("help", ajuda))
