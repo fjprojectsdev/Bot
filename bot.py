@@ -259,6 +259,25 @@ async def tabela_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(texto)
 
+# Kenesis links
+async def kenesis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texto = """⌨️ Kenesis - Future of Education
+
+📱 X: https://x.com/kenesis_io
+📱 TikTok: https://www.tiktok.com/@kenesis_io
+📱 Threads: https://www.threads.com/@kenesis.io
+💡 Medium: https://medium.com/@kenesisofficial
+📱 Website: https://kenesis.io/
+📱 YouTube: https://www.youtube.com/@kenesis_io
+📱 LinkedIn: https://www.linkedin.com/company/kenesis-io/
+📱 Telegram: https://t.me/KenesisOfficial
+📱 Instagram: https://www.instagram.com/kenesis.io
+📖 Whitepaper: https://kenesis.gitbook.io/whitepaper/
+
+🚀 Knowledge is technological, decentralized and no tracking."""
+    
+    await update.message.reply_text(texto)
+
 def calcular_sequencia(user_id):
     if user_id not in check_ins:
         return 0
@@ -483,6 +502,9 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /missao <tipo> <pts> [link] - Criar missão
 /tabela - Ver check-ins de hoje
 
+🚀 KENESIS:
+/kenesis - Links das redes sociais
+
 /help - Ver comandos"""
     
     await update.message.reply_text(texto)
@@ -516,6 +538,7 @@ def main():
     # Sistema de rastreamento
     app.add_handler(CommandHandler("link", confirmar_link))
     app.add_handler(CommandHandler("tabela", tabela_checkin))
+    app.add_handler(CommandHandler("kenesis", kenesis))
     
     # Ajuda
     app.add_handler(CommandHandler("help", ajuda))
