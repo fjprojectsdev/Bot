@@ -128,7 +128,7 @@ async def pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Enquetes
 async def enquete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 3:
-        await update.message.reply_text("Use: /enquete <pergunta> <opção1> <opção2> [opção3...]\nExemplo: /enquete 'Pizza favorita?' Calabresa Margherita Portuguesa")
+        await update.message.reply_text("Use: /poll <pergunta> <opção1> <opção2> [opção3...]\nExemplo: /poll 'Pizza favorita?' Calabresa Margherita Portuguesa")
         return
     
     pergunta = context.args[0]
@@ -140,13 +140,13 @@ async def enquete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = f"📊 ENQUETE: {pergunta}\n\n"
     for i, opcao in enumerate(opcoes):
         texto += f"{i+1}. {opcao}\n"
-    texto += "\nVote com /votar <número>"
+    texto += "\nVote com /voto <número>"
     
     await update.message.reply_text(texto)
 
 async def votar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Use: /votar <número>")
+        await update.message.reply_text("Use: /voto <número>")
         return
     
     chat_id = update.effective_chat.id
@@ -203,7 +203,7 @@ async def frase(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Lembrete
 async def lembrete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
-        await update.message.reply_text("Use: /lembrete <minutos> <mensagem>\nExemplo: /lembrete 30 Reunião às 15h")
+        await update.message.reply_text("Use: /aviso <minutos> <mensagem>\nExemplo: /aviso 30 Reunião às 15h")
         return
     
     try:
@@ -232,17 +232,17 @@ async def adivinhar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     numero = random.randint(1, 100)
     jogos_ativo[chat_id] = {"numero": numero, "tentativas": 0}
     
-    await update.message.reply_text("🎯 Jogo da Adivinhação!\n\nPensei em um número de 1 a 100.\nUse /tentar <número> para adivinhar!")
+    await update.message.reply_text("🎯 Jogo da Adivinhação!\n\nPensei em um número de 1 a 100.\nUse /num <número> para adivinhar!")
 
 async def tentar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Use: /tentar <número>")
+        await update.message.reply_text("Use: /num <número>")
         return
     
     chat_id = update.effective_chat.id
     
     if chat_id not in jogos_ativo:
-        await update.message.reply_text("Nenhum jogo ativo! Use /adivinhar para começar.")
+        await update.message.reply_text("Nenhum jogo ativo! Use /jogo para começar.")
         return
     
     tentativa = int(context.args[0])
@@ -283,7 +283,7 @@ async def piada(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Calcular idade
 async def idade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 3:
-        await update.message.reply_text("Use: /idade <dia> <mês> <ano>\nExemplo: /idade 15 03 1990")
+        await update.message.reply_text("Use: /calc <dia> <mês> <ano>\nExemplo: /calc 15 03 1990")
         return
     
     try:
@@ -301,37 +301,37 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = """🤖 COMANDOS DISPONÍVEIS:
 
 📊 ESTATÍSTICAS:
-/ranking - Ranking de mensagens
+/top - Ranking de mensagens
 
 🎉 SORTEIOS:
 /sorteio <prêmio> - Criar sorteio
-/participar - Entrar no sorteio
+/entrar - Entrar no sorteio
 /sortear - Escolher vencedor
 
 📅 EVENTOS:
 /evento <data> <descrição> - Criar evento
-/eventos - Ver eventos
+/agenda - Ver eventos
 
 📊 ENQUETES:
-/enquete <pergunta> <op1> <op2> - Criar enquete
-/votar <número> - Votar
+/poll <pergunta> <op1> <op2> - Criar enquete
+/voto <número> - Votar
 /resultado - Ver resultado
 
 🎮 JOGOS:
 /dado - Rolar dado
 /moeda - Cara ou coroa
-/adivinhar - Jogo de adivinhação
-/tentar <número> - Tentar adivinhar
+/jogo - Jogo de adivinhação
+/num <número> - Tentar adivinhar
 
 🎯 UTILIDADES:
-/escolher - Escolher pessoa aleatória
+/random - Escolher pessoa aleatória
 /frase - Frase motivacional
 /piada - Piada aleatória
-/idade <dia> <mês> <ano> - Calcular idade
-/lembrete <min> <msg> - Criar lembrete
-/pergunta - Resposta mágica
+/calc <dia> <mês> <ano> - Calcular idade
+/aviso <min> <msg> - Criar lembrete
+/magic - Resposta mágica
 
-/ajuda - Ver comandos"""
+/help - Ver comandos"""
     
     await update.message.reply_text(texto)
 
@@ -342,27 +342,52 @@ def main():
 
     # Handlers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contar))
-    app.add_handler(CommandHandler("ranking", ranking))
+    # Comandos principais
+    app.add_handler(CommandHandler("top", ranking))
+    app.add_handler(CommandHandler("ranking", ranking))  # Mantém o antigo
+    
+    # Sorteios
     app.add_handler(CommandHandler("sorteio", sorteio))
-    app.add_handler(CommandHandler("participar", participar))
+    app.add_handler(CommandHandler("entrar", participar))
+    app.add_handler(CommandHandler("participar", participar))  # Mantém o antigo
     app.add_handler(CommandHandler("sortear", sortear))
+    
+    # Eventos
     app.add_handler(CommandHandler("evento", evento))
-    app.add_handler(CommandHandler("eventos", eventos_lista))
+    app.add_handler(CommandHandler("agenda", eventos_lista))
+    app.add_handler(CommandHandler("eventos", eventos_lista))  # Mantém o antigo
+    
+    # Enquetes
+    app.add_handler(CommandHandler("poll", enquete))
+    app.add_handler(CommandHandler("enquete", enquete))  # Mantém o antigo
+    app.add_handler(CommandHandler("voto", votar))
+    app.add_handler(CommandHandler("votar", votar))  # Mantém o antigo
+    app.add_handler(CommandHandler("resultado", resultado))
+    
+    # Jogos
     app.add_handler(CommandHandler("dado", dado))
     app.add_handler(CommandHandler("moeda", moeda))
-    app.add_handler(CommandHandler("pergunta", pergunta))
-    app.add_handler(CommandHandler("ajuda", ajuda))
-    app.add_handler(CommandHandler("start", ajuda))
-    app.add_handler(CommandHandler("enquete", enquete))
-    app.add_handler(CommandHandler("votar", votar))
-    app.add_handler(CommandHandler("resultado", resultado))
+    app.add_handler(CommandHandler("jogo", adivinhar))
+    app.add_handler(CommandHandler("adivinhar", adivinhar))  # Mantém o antigo
+    app.add_handler(CommandHandler("num", tentar))
+    app.add_handler(CommandHandler("tentar", tentar))  # Mantém o antigo
+    
+    # Utilidades
+    app.add_handler(CommandHandler("random", escolher))
+    app.add_handler(CommandHandler("escolher", escolher))  # Mantém o antigo
     app.add_handler(CommandHandler("frase", frase))
-    app.add_handler(CommandHandler("lembrete", lembrete))
-    app.add_handler(CommandHandler("adivinhar", adivinhar))
-    app.add_handler(CommandHandler("tentar", tentar))
-    app.add_handler(CommandHandler("escolher", escolher))
     app.add_handler(CommandHandler("piada", piada))
-    app.add_handler(CommandHandler("idade", idade))
+    app.add_handler(CommandHandler("calc", idade))
+    app.add_handler(CommandHandler("idade", idade))  # Mantém o antigo
+    app.add_handler(CommandHandler("aviso", lembrete))
+    app.add_handler(CommandHandler("lembrete", lembrete))  # Mantém o antigo
+    app.add_handler(CommandHandler("magic", pergunta))
+    app.add_handler(CommandHandler("pergunta", pergunta))  # Mantém o antigo
+    
+    # Ajuda
+    app.add_handler(CommandHandler("help", ajuda))
+    app.add_handler(CommandHandler("ajuda", ajuda))  # Mantém o antigo
+    app.add_handler(CommandHandler("start", ajuda))
 
     print("Bot rodando...")
     app.run_polling()
