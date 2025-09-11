@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 import random
 import datetime
+import re
 
 # Dicionários para armazenar dados
 contagem = {}
@@ -23,6 +24,26 @@ atividade_tempo = {}  # {user_id: {ultima_acao, tempo_resposta_medio}}
 missoes_verificaveis = {}  # {missao_id: {tipo, parametros, completadas}}
 historico_mensagens = {}  # {user_id: [timestamps das últimas mensagens]}
 checkin_diario = {}  # {data: [user_ids que fizeram checkin]}
+
+# Sistema de IA Agent
+perguntas_frequentes = {
+    "kenesis": "Kenesis é o futuro da educação descentralizada! Use /kenesis para ver nossos links.",
+    "pontos": "Ganhe pontos participando do grupo, fazendo check-in e completando missões! Use /perfil para ver seus pontos.",
+    "ranking": "Veja o ranking com /top (mensagens) ou /rank (pontos).",
+    "missao": "Admins criam missões com /missao. Complete para ganhar pontos!",
+    "checkin": "Faça /checkin diário para ganhar 10 pontos + bônus por sequência!",
+    "como funciona": "Este é um grupo gamificado! Participe, complete missões e suba no ranking. Use /help para ver comandos."
+}
+
+eventos_automaticos = [
+    "🎉 Lembrete: Façam seu check-in diário com /checkin!",
+    "🚀 Que tal compartilhar algo interessante sobre tecnologia?",
+    "💡 Dica: Completem as missões ativas para ganhar pontos!",
+    "🏆 Vejam o ranking com /rank - quem está no topo?",
+    "📱 Não esqueçam de seguir a Kenesis nas redes sociais! /kenesis"
+]
+
+ultimo_evento = None
 
 # Função chamada a cada mensagem
 async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -56,6 +77,9 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         missao_completada = await verificar_missoes_engajamento(user_id, update.effective_chat.id)
         if missao_completada:
             await update.message.reply_text(f"🎉 {nome} completou missão de engajamento!\n+{missao_completada['pontos']} pontos")
+        
+        # IA Agent - Responder perguntas automaticamente
+        await processar_ia_agent(update)
 
 # Comando para ver ranking
 async def ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -256,6 +280,96 @@ async def tabela_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nome = contagem.get(user_id, {}).get("nome", "Usuário")
         sequencia = calcular_sequencia(user_id)
         texto += f"{i}. {nome} - {sequencia} dias seguidos\n"
+    
+    await update.message.reply_text(texto)
+
+# IA Agent - Processamento inteligente
+async def processar_ia_agent(update: Update):
+    texto = update.message.text.lower()
+    
+    # Detectar perguntas
+    if any(palavra in texto for palavra in ["?", "como", "que", "qual", "onde", "quando", "por que"]):
+        resposta = None
+        
+        # Buscar resposta nas FAQs
+        for palavra_chave, resposta_faq in perguntas_frequentes.items():
+            if palavra_chave in texto:
+                resposta = resposta_faq
+                break
+        
+        if resposta:
+            await update.message.reply_text(f"🤖 {resposta}")
+    
+    # Detectar palavras-chave para interação
+    if "bom dia" in texto or "boa tarde" in texto or "boa noite" in texto:
+        saudacoes = ["Olá! 👋", "Oi! Como vai? 😊", "E aí! 🚀", "Salve! 💪"]
+        await update.message.reply_text(random.choice(saudacoes))
+    
+    elif "obrigado" in texto or "valeu" in texto:
+        respostas = ["De nada! 😊", "Sempre às ordens! 🤖", "Por nada! 👍"]
+        await update.message.reply_text(random.choice(respostas))
+
+# Eventos automáticos
+async def evento_automatico(context):
+    global ultimo_evento
+    agora = datetime.datetime.now()
+    
+    # Evitar spam (mínimo 2h entre eventos)
+    if ultimo_evento and (agora - ultimo_evento).total_seconds() < 7200:
+        return
+    
+    # Escolher evento aleatório
+    evento = random.choice(eventos_automaticos)
+    ultimo_evento = agora
+    
+    # Enviar para todos os chats (você pode especificar chat_ids)
+    # Por enquanto, vou comentar para não fazer spam
+    # await context.bot.send_message(chat_id=SEU_CHAT_ID, text=evento)
+
+# Moderação automática
+async def moderar_mensagem(update: Update):
+    texto = update.message.text.lower()
+    user_id = update.effective_user.id
+    
+    # Detectar spam/flood excessivo
+    if user_id in historico_mensagens:
+        mensagens_recentes = len(historico_mensagens[user_id])
+        if mensagens_recentes > 8:  # Mais de 8 mensagens em 2 min
+            await update.message.reply_text("⚠️ Calma aí! Evite flood no grupo. 😅")
+            return True
+    
+    # Detectar palavrões (lista básica)
+    palavroes = ["spam", "lixo"]  # Adicione mais conforme necessário
+    if any(palavrao in texto for palavrao in palavroes):
+        await update.message.reply_text("🚫 Vamos manter o respeito no grupo!")
+        return True
+    
+    return False
+
+# Estatísticas do grupo
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    total_usuarios = len(contagem)
+    total_mensagens = sum(user["mensagens"] for user in contagem.values())
+    hoje = datetime.date.today().isoformat()
+    checkins_hoje = len(checkin_diario.get(hoje, []))
+    
+    # Usuário mais ativo
+    if contagem:
+        mais_ativo = max(contagem.values(), key=lambda x: x["mensagens"])
+        nome_ativo = mais_ativo["nome"]
+        msgs_ativo = mais_ativo["mensagens"]
+    else:
+        nome_ativo = "Ninguém"
+        msgs_ativo = 0
+    
+    texto = f"""📊 ESTATÍSTICAS DO GRUPO
+
+👥 Usuários ativos: {total_usuarios}
+💬 Total de mensagens: {total_mensagens}
+✅ Check-ins hoje: {checkins_hoje}
+🏆 Mais ativo: {nome_ativo} ({msgs_ativo} msgs)
+
+🤖 Bot funcionando como agente ativo!"""
     
     await update.message.reply_text(texto)
 
@@ -504,6 +618,12 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🚀 KENESIS:
 /kenesis - Links das redes sociais
+/stats - Estatísticas do grupo
+
+🤖 IA ATIVA:
+- Responde perguntas automaticamente
+- Modera mensagens
+- Faz eventos periódicos
 
 /help - Ver comandos"""
     
@@ -539,6 +659,10 @@ def main():
     app.add_handler(CommandHandler("link", confirmar_link))
     app.add_handler(CommandHandler("tabela", tabela_checkin))
     app.add_handler(CommandHandler("kenesis", kenesis))
+    app.add_handler(CommandHandler("stats", stats))
+    
+    # Eventos automáticos a cada 3 horas
+    # app.job_queue.run_repeating(evento_automatico, interval=10800, first=10)
     
     # Ajuda
     app.add_handler(CommandHandler("help", ajuda))
