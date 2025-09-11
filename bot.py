@@ -19,9 +19,10 @@ engajamento = {}  # {user_id: {acao: contador}}
 
 # Sistema de rastreamento automático
 links_rastreamento = {}  # {link_id: {user_id, missao_id, timestamp}}
-formularios = {}  # {form_id: {user_id, completed, timestamp}}
 atividade_tempo = {}  # {user_id: {ultima_acao, tempo_resposta_medio}}
 missoes_verificaveis = {}  # {missao_id: {tipo, parametros, completadas}}
+historico_mensagens = {}  # {user_id: [timestamps das últimas mensagens]}
+checkin_diario = {}  # {data: [user_ids que fizeram checkin]}
 
 # Função chamada a cada mensagem
 async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -43,6 +44,10 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Rastrear atividade e tempo de resposta
         await rastrear_atividade(user_id)
+        
+        # Verificar se é flood
+        if verificar_flood(user_id, update.message.text):
+            return  # Não conta mensagem de flood
         
         # Verificar badges automáticos
         await verificar_badges(update, user_id)
@@ -215,6 +220,11 @@ async def checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     check_ins[user_id][hoje] = True
     pontos[user_id] = pontos.get(user_id, 0) + 10
     
+    # Adicionar à lista diária
+    if hoje not in checkin_diario:
+        checkin_diario[hoje] = []
+    checkin_diario[hoje].append(user_id)
+    
     # Verificar sequência
     sequencia = calcular_sequencia(user_id)
     bonus = 0
@@ -229,6 +239,23 @@ async def checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = f"✅ Check-in realizado, {nome}!\n+10 pontos"
     if bonus > 0:
         texto += f"\n🔥 Sequência de {sequencia} dias! +{bonus} pontos bônus!"
+    
+    await update.message.reply_text(texto)
+
+# Tabela de check-ins
+async def tabela_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    hoje = datetime.date.today().isoformat()
+    
+    if hoje not in checkin_diario or not checkin_diario[hoje]:
+        await update.message.reply_text("📊 Nenhum check-in hoje ainda!")
+        return
+    
+    texto = f"📊 CHECK-INS DE HOJE ({hoje}):\n\n"
+    
+    for i, user_id in enumerate(checkin_diario[hoje], 1):
+        nome = contagem.get(user_id, {}).get("nome", "Usuário")
+        sequencia = calcular_sequencia(user_id)
+        texto += f"{i}. {nome} - {sequencia} dias seguidos\n"
     
     await update.message.reply_text(texto)
 
@@ -267,10 +294,34 @@ async def rastrear_atividade(user_id):
     atividade_tempo[user_id]["ultima_acao"] = agora
     atividade_tempo[user_id]["acoes_total"] += 1
 
-# Criar missão com link rastreável
+# Verificar se é flood
+def verificar_flood(user_id, texto):
+    agora = datetime.datetime.now()
+    
+    if user_id not in historico_mensagens:
+        historico_mensagens[user_id] = []
+    
+    # Limpar mensagens antigas (últimos 2 minutos)
+    historico_mensagens[user_id] = [
+        timestamp for timestamp in historico_mensagens[user_id]
+        if (agora - timestamp).total_seconds() < 120
+    ]
+    
+    # Verificar flood: mais de 5 mensagens em 2 min OU mensagem muito curta
+    if len(historico_mensagens[user_id]) >= 5:
+        return True
+    
+    if len(texto) < 10:  # Mensagem muito curta
+        return True
+    
+    # Adicionar timestamp atual
+    historico_mensagens[user_id].append(agora)
+    return False
+
+# Criar missão
 async def criar_missao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
-        await update.message.reply_text("Use: /missao <tipo> <pontos>\nTipos: link, formulario, checkin, engajamento")
+        await update.message.reply_text("Use: /missao <tipo> <pontos> [link]\nTipos: link, checkin, engajamento")
         return
     
     chat_id = update.effective_chat.id
@@ -288,31 +339,23 @@ async def criar_missao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         missoes[chat_id] = {}
     
     if tipo == "link":
+        if len(context.args) < 3:
+            await update.message.reply_text("Use: /missao link <pontos> <seu_link>\nExemplo: /missao link 50 https://instagram.com/p/abc123")
+            return
+        
+        link_personalizado = context.args[2]
         link_id = f"track_{missao_id}_{random.randint(1000, 9999)}"
-        link_url = f"https://t.me/seu_bot?start={link_id}"
         
         missoes[chat_id][missao_id] = {
             "titulo": "Acessar Link",
             "pontos": pts,
             "tipo": "link",
             "link_id": link_id,
+            "link_original": link_personalizado,
             "ativa": True
         }
         
-        await update.message.reply_text(f"🔗 MISSÃO LINK CRIADA!\n\n📋 Acessar Link\n🎯 {pts} pontos\n\n🔗 Link: {link_url}\n\n✅ Cliques são rastreados automaticamente!")
-    
-    elif tipo == "formulario":
-        form_id = f"form_{missao_id}_{random.randint(1000, 9999)}"
-        
-        missoes[chat_id][missao_id] = {
-            "titulo": "Preencher Formulário",
-            "pontos": pts,
-            "tipo": "formulario",
-            "form_id": form_id,
-            "ativa": True
-        }
-        
-        await update.message.reply_text(f"📝 MISSÃO FORMULÁRIO CRIADA!\n\n📋 Preencher Formulário\n🎯 {pts} pontos\n\nID: {form_id}\nUse /form {form_id} para completar")
+        await update.message.reply_text(f"🔗 MISSÃO LINK CRIADA!\n\n📋 Acessar: {link_personalizado}\n🎯 {pts} pontos\n\n✅ Use /link {link_id} após acessar o link!")
     
     elif tipo == "checkin":
         missoes[chat_id][missao_id] = {
@@ -333,11 +376,12 @@ async def criar_missao(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ativa": True
         }
         
-        await update.message.reply_text(f"💬 MISSÃO ENGAJAMENTO CRIADA!\n\n📋 Enviar 10 mensagens\n🎯 {pts} pontos\n\n📊 Progresso rastreado automaticamente!")
+        await update.message.reply_text(f"💬 MISSÃO ENGAJAMENTO CRIADA!\n\n📋 Enviar 10 mensagens válidas\n🎯 {pts} pontos\n\n🚫 Flood não conta!")
 
-# Processar clique em link rastreável
-async def processar_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Confirmar acesso ao link
+async def confirmar_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
+        await update.message.reply_text("Use: /link <id>")
         return
     
     link_id = context.args[0]
@@ -346,17 +390,15 @@ async def processar_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Verificar se é um link válido
     missao_encontrada = None
-    chat_id_missao = None
     
     for chat_id, missoes_chat in missoes.items():
         for missao_id, dados in missoes_chat.items():
             if dados.get("link_id") == link_id and dados["ativa"]:
                 missao_encontrada = dados
-                chat_id_missao = chat_id
                 break
     
     if not missao_encontrada:
-        await update.message.reply_text("Link inválido ou expirado!")
+        await update.message.reply_text("ID inválido!")
         return
     
     # Verificar se já completou
@@ -368,58 +410,12 @@ async def processar_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Registrar conclusão
-    links_rastreamento[link_id] = {
-        "user_id": user_id,
-        "timestamp": datetime.datetime.now(),
-        "ip": "rastreado"
-    }
-    
     missoes_usuario[user_id][link_id] = True
     pontos[user_id] = pontos.get(user_id, 0) + missao_encontrada["pontos"]
     
-    await update.message.reply_text(f"✅ {nome} completou a missão '{missao_encontrada['titulo']}'!\n+{missao_encontrada['pontos']} pontos\n\n🔒 Verificação automática realizada!")
+    await update.message.reply_text(f"✅ {nome} acessou o link!\n+{missao_encontrada['pontos']} pontos\n\n🔗 Link: {missao_encontrada['link_original']}")
 
-# Completar formulário
-async def completar_formulario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Use: /form <id_formulario>")
-        return
-    
-    form_id = context.args[0]
-    user_id = update.effective_user.id
-    nome = update.effective_user.first_name
-    
-    # Verificar se formulário existe
-    missao_encontrada = None
-    for chat_id, missoes_chat in missoes.items():
-        for missao_id, dados in missoes_chat.items():
-            if dados.get("form_id") == form_id and dados["ativa"]:
-                missao_encontrada = dados
-                break
-    
-    if not missao_encontrada:
-        await update.message.reply_text("Formulário não encontrado!")
-        return
-    
-    # Verificar se já completou
-    if user_id not in missoes_usuario:
-        missoes_usuario[user_id] = {}
-    
-    if form_id in missoes_usuario[user_id]:
-        await update.message.reply_text("Você já preencheu este formulário!")
-        return
-    
-    # Simular preenchimento (em produção seria um formulário real)
-    formularios[form_id] = {
-        "user_id": user_id,
-        "completed": True,
-        "timestamp": datetime.datetime.now()
-    }
-    
-    missoes_usuario[user_id][form_id] = True
-    pontos[user_id] = pontos.get(user_id, 0) + missao_encontrada["pontos"]
-    
-    await update.message.reply_text(f"📝 {nome} preencheu o formulário!\n+{missao_encontrada['pontos']} pontos\n\n✅ Dados verificados automaticamente!")
+
 
 # Verificar missões de engajamento automaticamente
 async def verificar_missoes_engajamento(user_id, chat_id):
@@ -484,7 +480,8 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /random - Escolher pessoa aleatória
 
 🛠️ ADMIN:
-/missao <título> <pts> <desc> - Criar missão
+/missao <tipo> <pts> [link] - Criar missão
+/tabela - Ver check-ins de hoje
 
 /help - Ver comandos"""
     
@@ -517,8 +514,8 @@ def main():
     app.add_handler(CommandHandler("missao", criar_missao))
     
     # Sistema de rastreamento
-    app.add_handler(CommandHandler("start", processar_link))
-    app.add_handler(CommandHandler("form", completar_formulario))
+    app.add_handler(CommandHandler("link", confirmar_link))
+    app.add_handler(CommandHandler("tabela", tabela_checkin))
     
     # Ajuda
     app.add_handler(CommandHandler("help", ajuda))
