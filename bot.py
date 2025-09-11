@@ -96,104 +96,9 @@ async def sortear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🎊 PARABÉNS {vencedor['nome']}!\n\nVocê ganhou: {premio}")
     del sorteios[chat_id]
 
-# Poll simples
-async def poll(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    pergunta = "Melhor time?"
-    opcoes = ["Flamengo", "Vasco"]
-    
-    enquetes[chat_id] = {"pergunta": pergunta, "opcoes": opcoes, "votos": {i: [] for i in range(len(opcoes))}}
-    
-    texto = f"📊 ENQUETE: {pergunta}\n\n"
-    for i, opcao in enumerate(opcoes):
-        texto += f"{i+1}. {opcao}\n"
-    texto += "\nVote com /voto <número>"
-    
-    await update.message.reply_text(texto)
 
-async def votar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Use: /voto <número>")
-        return
-    
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    nome = update.effective_user.first_name
-    opcao = int(context.args[0]) - 1
-    
-    if chat_id not in enquetes:
-        await update.message.reply_text("Não há enquete ativa!")
-        return
-    
-    if opcao < 0 or opcao >= len(enquetes[chat_id]["opcoes"]):
-        await update.message.reply_text("Opção inválida!")
-        return
-    
-    # Remove voto anterior
-    for votos in enquetes[chat_id]["votos"].values():
-        if user_id in votos:
-            votos.remove(user_id)
-    
-    enquetes[chat_id]["votos"][opcao].append(user_id)
-    pontos[user_id] = pontos.get(user_id, 0) + 5
-    
-    await update.message.reply_text(f"✅ {nome} votou em: {enquetes[chat_id]['opcoes'][opcao]} (+5 pontos!)")
 
-async def resultado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in enquetes:
-        await update.message.reply_text("Não há enquete ativa!")
-        return
-    
-    enquete_data = enquetes[chat_id]
-    texto = f"📊 RESULTADO: {enquete_data['pergunta']}\n\n"
-    
-    for i, opcao in enumerate(enquete_data['opcoes']):
-        votos = len(enquete_data['votos'][i])
-        texto += f"{i+1}. {opcao}: {votos} votos\n"
-    
-    await update.message.reply_text(texto)
 
-# Frases motivacionais
-async def frase(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    frases_lista = [
-        "Acredite em você mesmo! 💪",
-        "Cada dia é uma nova oportunidade! 🌅",
-        "O sucesso é a soma de pequenos esforços! ⭐",
-        "Seja a mudança que você quer ver no mundo! 🌍",
-        "Grandes coisas começam com pequenos passos! 👣",
-        "Você é mais forte do que imagina! 💎",
-        "O impossível é só uma opinião! 🚀"
-    ]
-    frase_escolhida = random.choice(frases_lista)
-    await update.message.reply_text(f"✨ {frase_escolhida}")
-
-# Lembrete
-async def lembrete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 2:
-        await update.message.reply_text("Use: /aviso <minutos> <mensagem>\nExemplo: /aviso 30 Reunião às 15h")
-        return
-    
-    try:
-        minutos = int(context.args[0])
-        mensagem = " ".join(context.args[1:])
-        
-        if minutos > 1440:  # Max 24h
-            await update.message.reply_text("Máximo 1440 minutos (24h)!")
-            return
-        
-        context.job_queue.run_once(
-            lambda context: context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"⏰ LEMBRETE: {mensagem}"
-            ),
-            minutos * 60
-        )
-        
-        await update.message.reply_text(f"⏰ Lembrete criado para {minutos} minutos!")
-    except ValueError:
-        await update.message.reply_text("Tempo deve ser um número!")
 
 # Escolher pessoa aleatória
 async def escolher(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -367,85 +272,7 @@ async def ver_missoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(texto)
 
-# Completar missão
-async def completar_missao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Use: /completar <número_missão>")
-        return
-    
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    nome = update.effective_user.first_name
-    missao_id = int(context.args[0])
-    
-    if chat_id not in missoes or missao_id not in missoes[chat_id]:
-        await update.message.reply_text("Missão não encontrada!")
-        return
-    
-    if user_id not in missoes_usuario:
-        missoes_usuario[user_id] = {}
-    
-    if missao_id in missoes_usuario[user_id]:
-        await update.message.reply_text("Você já completou esta missão!")
-        return
-    
-    # Completar missão
-    missao = missoes[chat_id][missao_id]
-    missoes_usuario[user_id][missao_id] = True
-    pontos[user_id] = pontos.get(user_id, 0) + missao["pontos"]
-    engajamento[user_id]["missoes"] = engajamento.get(user_id, {}).get("missoes", 0) + 1
-    
-    await update.message.reply_text(f"✅ {nome} completou a missão '{missao['titulo']}'!\n+{missao['pontos']} pontos")
 
-# Quiz interativo
-async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    perguntas = [
-        {"pergunta": "Qual a capital do Brasil?", "opcoes": ["Rio de Janeiro", "São Paulo", "Brasília"], "correta": 2},
-        {"pergunta": "Quantos dias tem um ano?", "opcoes": ["364", "365", "366"], "correta": 1},
-        {"pergunta": "Qual o maior planeta?", "opcoes": ["Terra", "Júpiter", "Saturno"], "correta": 1}
-    ]
-    
-    quiz_escolhido = random.choice(perguntas)
-    chat_id = update.effective_chat.id
-    
-    # Armazenar quiz ativo
-    if chat_id not in jogos_ativo:
-        jogos_ativo[chat_id] = {}
-    
-    jogos_ativo[chat_id]["quiz"] = quiz_escolhido
-    
-    texto = f"🧠 QUIZ TIME!\n\n❓ {quiz_escolhido['pergunta']}\n\n"
-    for i, opcao in enumerate(quiz_escolhido['opcoes']):
-        texto += f"{i+1}. {opcao}\n"
-    texto += "\nResponda com /resposta <número>"
-    
-    await update.message.reply_text(texto)
-
-# Responder quiz
-async def responder_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Use: /resposta <número>")
-        return
-    
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    nome = update.effective_user.first_name
-    resposta = int(context.args[0]) - 1
-    
-    if chat_id not in jogos_ativo or "quiz" not in jogos_ativo[chat_id]:
-        await update.message.reply_text("Nenhum quiz ativo!")
-        return
-    
-    quiz = jogos_ativo[chat_id]["quiz"]
-    
-    if resposta == quiz["correta"]:
-        pontos[user_id] = pontos.get(user_id, 0) + 20
-        await update.message.reply_text(f"✅ Correto, {nome}! +20 pontos")
-    else:
-        await update.message.reply_text(f"❌ Errado, {nome}. A resposta correta era: {quiz['opcoes'][quiz['correta']]}")
-    
-    # Remover quiz
-    del jogos_ativo[chat_id]["quiz"]
 
 # Ajuda
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -456,9 +283,6 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /rank - Ranking de pontos
 /checkin - Check-in diário (+10 pts)
 /missoes - Ver missões ativas
-/completar <num> - Completar missão
-/quiz - Quiz interativo (+20 pts)
-/resposta <num> - Responder quiz
 
 📊 ESTATÍSTICAS:
 /top - Ranking de mensagens
@@ -468,15 +292,8 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /entrar - Entrar no sorteio
 /sortear - Escolher vencedor
 
-📊 ENQUETES:
-/poll - Criar enquete
-/voto <número> - Votar
-/resultado - Ver resultado
-
 🎯 UTILIDADES:
 /random - Escolher pessoa aleatória
-/frase - Frase motivacional
-/aviso <min> <msg> - Criar lembrete
 
 🛠️ ADMIN:
 /missao <título> <pts> <desc> - Criar missão
@@ -501,15 +318,8 @@ def main():
     app.add_handler(CommandHandler("entrar", participar))
     app.add_handler(CommandHandler("sortear", sortear))
     
-    # Enquetes
-    app.add_handler(CommandHandler("poll", poll))
-    app.add_handler(CommandHandler("voto", votar))
-    app.add_handler(CommandHandler("resultado", resultado))
-    
     # Utilidades
     app.add_handler(CommandHandler("random", escolher))
-    app.add_handler(CommandHandler("frase", frase))
-    app.add_handler(CommandHandler("aviso", lembrete))
     
     # Gamificação
     app.add_handler(CommandHandler("perfil", perfil))
@@ -517,9 +327,6 @@ def main():
     app.add_handler(CommandHandler("checkin", checkin))
     app.add_handler(CommandHandler("missoes", ver_missoes))
     app.add_handler(CommandHandler("missao", criar_missao))
-    app.add_handler(CommandHandler("completar", completar_missao))
-    app.add_handler(CommandHandler("quiz", quiz))
-    app.add_handler(CommandHandler("resposta", responder_quiz))
     
     # Ajuda
     app.add_handler(CommandHandler("help", ajuda))
