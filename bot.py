@@ -6,11 +6,17 @@ import datetime
 # Dicionários para armazenar dados
 contagem = {}
 sorteios = {}
-eventos = {}
 enquetes = {}
-frases = {}
 lembretes = {}
 jogos_ativo = {}
+
+# Sistema de gamificação
+pontos = {}  # {user_id: pontos}
+badges = {}  # {user_id: [lista_badges]}
+missoes = {}  # {chat_id: {missao_id: dados}}
+missoes_usuario = {}  # {user_id: {missao_id: status}}
+check_ins = {}  # {user_id: {data: True/False}}
+engajamento = {}  # {user_id: {acao: contador}}
 
 # Função chamada a cada mensagem
 async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -20,8 +26,18 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if user_id not in contagem:
             contagem[user_id] = {"nome": nome, "mensagens": 0}
+            pontos[user_id] = 0
+            badges[user_id] = []
+            engajamento[user_id] = {"mensagens": 0, "comandos": 0, "missoes": 0}
 
         contagem[user_id]["mensagens"] += 1
+        engajamento[user_id]["mensagens"] += 1
+        
+        # Sistema de pontos por mensagem
+        pontos[user_id] += 1
+        
+        # Verificar badges automáticos
+        await verificar_badges(update, user_id)
 
 # Comando para ver ranking
 async def ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,15 +55,10 @@ async def ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Sorteio
 async def sorteio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Use: /sorteio <prêmio>\nExemplo: /sorteio Pizza")
-        return
-    
-    premio = " ".join(context.args)
     chat_id = update.effective_chat.id
-    sorteios[chat_id] = {"premio": premio, "participantes": [], "criador": update.effective_user.first_name}
+    sorteios[chat_id] = {"premio": "Prêmio", "participantes": [], "criador": update.effective_user.first_name}
     
-    await update.message.reply_text(f"🎉 Sorteio criado: {premio}\n\nPara participar, digite /participar")
+    await update.message.reply_text(f"🎉 Sorteio criado!\n\nPara participar, digite /entrar")
 
 # Participar do sorteio
 async def participar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -59,13 +70,17 @@ async def participar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Não há sorteio ativo!")
         return
     
-    if user_id in sorteios[chat_id]["participantes"]:
+    if any(p["id"] == user_id for p in sorteios[chat_id]["participantes"]):
         await update.message.reply_text("Você já está participando!")
         return
     
     sorteios[chat_id]["participantes"].append({"id": user_id, "nome": nome})
     total = len(sorteios[chat_id]["participantes"])
-    await update.message.reply_text(f"✅ {nome} entrou no sorteio! ({total} participantes)")
+    
+    # Dar pontos por participar
+    pontos[user_id] = pontos.get(user_id, 0) + 5
+    
+    await update.message.reply_text(f"✅ {nome} entrou no sorteio! ({total} participantes) (+5 pontos!)")
 
 # Sortear vencedor
 async def sortear(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,59 +96,11 @@ async def sortear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🎊 PARABÉNS {vencedor['nome']}!\n\nVocê ganhou: {premio}")
     del sorteios[chat_id]
 
-# Criar evento
-async def evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 2:
-        await update.message.reply_text("Use: /evento <data> <descrição>\nExemplo: /evento 15/12 Festa de Natal")
-        return
-    
-    data = context.args[0]
-    descricao = " ".join(context.args[1:])
+# Poll simples
+async def poll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    
-    if chat_id not in eventos:
-        eventos[chat_id] = []
-    
-    eventos[chat_id].append({"data": data, "descricao": descricao})
-    await update.message.reply_text(f"📅 Evento criado:\n{data} - {descricao}")
-
-# Ver eventos
-async def eventos_lista(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in eventos or not eventos[chat_id]:
-        await update.message.reply_text("Não há eventos programados!")
-        return
-    
-    texto = "📅 Eventos programados:\n\n"
-    for evento in eventos[chat_id]:
-        texto += f"• {evento['data']} - {evento['descricao']}\n"
-    
-    await update.message.reply_text(texto)
-
-# Brincadeiras
-async def dado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    resultado = random.randint(1, 6)
-    await update.message.reply_text(f"🎲 {update.effective_user.first_name} rolou: {resultado}")
-
-async def moeda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    resultado = random.choice(["Cara", "Coroa"])
-    await update.message.reply_text(f"🪙 {resultado}!")
-
-async def pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    respostas = ["Sim", "Não", "Talvez", "Com certeza", "Jamais", "Provavelmente", "Impossível"]
-    resposta = random.choice(respostas)
-    await update.message.reply_text(f"🔮 {resposta}")
-
-# Enquetes
-async def enquete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 3:
-        await update.message.reply_text("Use: /poll <pergunta> <opção1> <opção2> [opção3...]\nExemplo: /poll 'Pizza favorita?' Calabresa Margherita Portuguesa")
-        return
-    
-    pergunta = context.args[0]
-    opcoes = context.args[1:]
-    chat_id = update.effective_chat.id
+    pergunta = "Melhor time?"
+    opcoes = ["Flamengo", "Vasco"]
     
     enquetes[chat_id] = {"pergunta": pergunta, "opcoes": opcoes, "votos": {i: [] for i in range(len(opcoes))}}
     
@@ -168,7 +135,9 @@ async def votar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             votos.remove(user_id)
     
     enquetes[chat_id]["votos"][opcao].append(user_id)
-    await update.message.reply_text(f"✅ {nome} votou em: {enquetes[chat_id]['opcoes'][opcao]}")
+    pontos[user_id] = pontos.get(user_id, 0) + 5
+    
+    await update.message.reply_text(f"✅ {nome} votou em: {enquetes[chat_id]['opcoes'][opcao]} (+5 pontos!)")
 
 async def resultado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -226,39 +195,6 @@ async def lembrete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("Tempo deve ser um número!")
 
-# Jogo da adivinhação
-async def adivinhar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    numero = random.randint(1, 100)
-    jogos_ativo[chat_id] = {"numero": numero, "tentativas": 0}
-    
-    await update.message.reply_text("🎯 Jogo da Adivinhação!\n\nPensei em um número de 1 a 100.\nUse /num <número> para adivinhar!")
-
-async def tentar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Use: /num <número>")
-        return
-    
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in jogos_ativo:
-        await update.message.reply_text("Nenhum jogo ativo! Use /jogo para começar.")
-        return
-    
-    tentativa = int(context.args[0])
-    numero_secreto = jogos_ativo[chat_id]["numero"]
-    jogos_ativo[chat_id]["tentativas"] += 1
-    tentativas = jogos_ativo[chat_id]["tentativas"]
-    nome = update.effective_user.first_name
-    
-    if tentativa == numero_secreto:
-        await update.message.reply_text(f"🎉 PARABÉNS {nome}!\nVocê acertou o número {numero_secreto} em {tentativas} tentativas!")
-        del jogos_ativo[chat_id]
-    elif tentativa < numero_secreto:
-        await update.message.reply_text(f"📈 {nome}, o número é MAIOR que {tentativa}! (Tentativa {tentativas})")
-    else:
-        await update.message.reply_text(f"📉 {nome}, o número é MENOR que {tentativa}! (Tentativa {tentativas})")
-
 # Escolher pessoa aleatória
 async def escolher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not contagem:
@@ -268,68 +204,282 @@ async def escolher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pessoa = random.choice(list(contagem.values()))
     await update.message.reply_text(f"🎯 Escolhido: {pessoa['nome']}!")
 
-# Piada
-async def piada(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    piadas = [
-        "Por que os pássaros voam para o sul no inverno? Porque é longe demais para ir andando! 😂",
-        "O que o pato disse para a pata? Vem quá! 🦆",
-        "Por que o livro de matemática estava triste? Porque tinha muitos problemas! 📚",
-        "O que a impressora falou para a outra impressora? Essa folha é sua ou é impressão minha? 🖨️",
-        "Por que o café foi à polícia? Porque foi coado! ☕"
-    ]
-    piada_escolhida = random.choice(piadas)
-    await update.message.reply_text(piada_escolhida)
+# Sistema de gamificação
+async def verificar_badges(update, user_id):
+    nome = contagem[user_id]["nome"]
+    mensagens = contagem[user_id]["mensagens"]
+    user_badges = badges[user_id]
+    
+    # Badge de mensagens
+    if mensagens >= 100 and "Tagarela" not in user_badges:
+        badges[user_id].append("Tagarela")
+        pontos[user_id] += 50
+        await update.message.reply_text(f"🏆 {nome} ganhou o badge 'Tagarela' (+50 pontos!)")
+    
+    if mensagens >= 500 and "Comunicador" not in user_badges:
+        badges[user_id].append("Comunicador")
+        pontos[user_id] += 100
+        await update.message.reply_text(f"🏆 {nome} ganhou o badge 'Comunicador' (+100 pontos!)")
 
-# Calcular idade
-async def idade(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) != 3:
-        await update.message.reply_text("Use: /calc <dia> <mês> <ano>\nExemplo: /calc 15 03 1990")
+# Perfil do usuário
+async def perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    
+    if user_id not in pontos:
+        pontos[user_id] = 0
+        badges[user_id] = []
+    
+    user_pontos = pontos[user_id]
+    user_badges = badges[user_id]
+    mensagens = contagem.get(user_id, {}).get("mensagens", 0)
+    
+    # Calcular nível
+    nivel = user_pontos // 100 + 1
+    proximo_nivel = (nivel * 100) - user_pontos
+    
+    texto = f"👤 PERFIL DE {nome}\n\n"
+    texto += f"⭐ Nível: {nivel}\n"
+    texto += f"🎯 Pontos: {user_pontos}\n"
+    texto += f"📈 Para próximo nível: {proximo_nivel} pontos\n"
+    texto += f"💬 Mensagens: {mensagens}\n\n"
+    
+    if user_badges:
+        texto += "🏆 BADGES:\n"
+        for badge in user_badges:
+            texto += f"• {badge}\n"
+    else:
+        texto += "🏆 Nenhum badge ainda\n"
+    
+    await update.message.reply_text(texto)
+
+# Ranking de pontos
+async def rank_pontos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not pontos:
+        await update.message.reply_text("Ainda não há pontos registrados!")
         return
     
-    try:
-        dia, mes, ano = map(int, context.args)
-        nascimento = datetime.date(ano, mes, dia)
-        hoje = datetime.date.today()
-        idade_anos = hoje.year - nascimento.year - ((hoje.month, hoje.day) < (nascimento.month, nascimento.day))
-        
-        await update.message.reply_text(f"🎂 Você tem {idade_anos} anos!")
-    except ValueError:
-        await update.message.reply_text("Data inválida!")
+    # Ordenar por pontos
+    ranking_texto = "🏆 RANKING DE PONTOS:\n\n"
+    ordenado = sorted(pontos.items(), key=lambda x: x[1], reverse=True)
+    
+    for i, (user_id, pts) in enumerate(ordenado[:10], start=1):
+        nome = contagem.get(user_id, {}).get("nome", "Usuário")
+        nivel = pts // 100 + 1
+        ranking_texto += f"{i}. {nome}: {pts} pts (Nv.{nivel})\n"
+    
+    await update.message.reply_text(ranking_texto)
 
-# Ajuda atualizada
+# Check-in diário
+async def checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    hoje = datetime.date.today().isoformat()
+    
+    if user_id not in check_ins:
+        check_ins[user_id] = {}
+    
+    if hoje in check_ins[user_id]:
+        await update.message.reply_text(f"✅ {nome}, você já fez check-in hoje!")
+        return
+    
+    # Fazer check-in
+    check_ins[user_id][hoje] = True
+    pontos[user_id] = pontos.get(user_id, 0) + 10
+    
+    # Verificar sequência
+    sequencia = calcular_sequencia(user_id)
+    bonus = 0
+    
+    if sequencia >= 7:
+        bonus = 50
+        pontos[user_id] += bonus
+    elif sequencia >= 3:
+        bonus = 20
+        pontos[user_id] += bonus
+    
+    texto = f"✅ Check-in realizado, {nome}!\n+10 pontos"
+    if bonus > 0:
+        texto += f"\n🔥 Sequência de {sequencia} dias! +{bonus} pontos bônus!"
+    
+    await update.message.reply_text(texto)
+
+def calcular_sequencia(user_id):
+    if user_id not in check_ins:
+        return 0
+    
+    sequencia = 0
+    data_atual = datetime.date.today()
+    
+    while True:
+        data_str = data_atual.isoformat()
+        if data_str in check_ins[user_id]:
+            sequencia += 1
+            data_atual -= datetime.timedelta(days=1)
+        else:
+            break
+    
+    return sequencia
+
+# Criar missão
+async def criar_missao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 3:
+        await update.message.reply_text("Use: /missao <título> <pontos> <descrição>\nExemplo: /missao 'Participar enquete' 25 'Vote na próxima enquete'")
+        return
+    
+    chat_id = update.effective_chat.id
+    titulo = context.args[0]
+    try:
+        pts = int(context.args[1])
+    except ValueError:
+        await update.message.reply_text("Pontos deve ser um número!")
+        return
+    
+    descricao = " ".join(context.args[2:])
+    missao_id = len(missoes.get(chat_id, {})) + 1
+    
+    if chat_id not in missoes:
+        missoes[chat_id] = {}
+    
+    missoes[chat_id][missao_id] = {
+        "titulo": titulo,
+        "pontos": pts,
+        "descricao": descricao,
+        "ativa": True
+    }
+    
+    await update.message.reply_text(f"🎯 NOVA MISSÃO CRIADA!\n\n📋 {titulo}\n🎯 {pts} pontos\n📝 {descricao}\n\nUse /missoes para ver todas")
+
+# Ver missões
+async def ver_missoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    
+    if chat_id not in missoes or not missoes[chat_id]:
+        await update.message.reply_text("Nenhuma missão ativa!")
+        return
+    
+    texto = "🎯 MISSÕES ATIVAS:\n\n"
+    for missao_id, dados in missoes[chat_id].items():
+        if dados["ativa"]:
+            texto += f"#{missao_id} - {dados['titulo']}\n"
+            texto += f"🎯 {dados['pontos']} pontos\n"
+            texto += f"📝 {dados['descricao']}\n\n"
+    
+    await update.message.reply_text(texto)
+
+# Completar missão
+async def completar_missao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Use: /completar <número_missão>")
+        return
+    
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    missao_id = int(context.args[0])
+    
+    if chat_id not in missoes or missao_id not in missoes[chat_id]:
+        await update.message.reply_text("Missão não encontrada!")
+        return
+    
+    if user_id not in missoes_usuario:
+        missoes_usuario[user_id] = {}
+    
+    if missao_id in missoes_usuario[user_id]:
+        await update.message.reply_text("Você já completou esta missão!")
+        return
+    
+    # Completar missão
+    missao = missoes[chat_id][missao_id]
+    missoes_usuario[user_id][missao_id] = True
+    pontos[user_id] = pontos.get(user_id, 0) + missao["pontos"]
+    engajamento[user_id]["missoes"] = engajamento.get(user_id, {}).get("missoes", 0) + 1
+    
+    await update.message.reply_text(f"✅ {nome} completou a missão '{missao['titulo']}'!\n+{missao['pontos']} pontos")
+
+# Quiz interativo
+async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    perguntas = [
+        {"pergunta": "Qual a capital do Brasil?", "opcoes": ["Rio de Janeiro", "São Paulo", "Brasília"], "correta": 2},
+        {"pergunta": "Quantos dias tem um ano?", "opcoes": ["364", "365", "366"], "correta": 1},
+        {"pergunta": "Qual o maior planeta?", "opcoes": ["Terra", "Júpiter", "Saturno"], "correta": 1}
+    ]
+    
+    quiz_escolhido = random.choice(perguntas)
+    chat_id = update.effective_chat.id
+    
+    # Armazenar quiz ativo
+    if chat_id not in jogos_ativo:
+        jogos_ativo[chat_id] = {}
+    
+    jogos_ativo[chat_id]["quiz"] = quiz_escolhido
+    
+    texto = f"🧠 QUIZ TIME!\n\n❓ {quiz_escolhido['pergunta']}\n\n"
+    for i, opcao in enumerate(quiz_escolhido['opcoes']):
+        texto += f"{i+1}. {opcao}\n"
+    texto += "\nResponda com /resposta <número>"
+    
+    await update.message.reply_text(texto)
+
+# Responder quiz
+async def responder_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Use: /resposta <número>")
+        return
+    
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    resposta = int(context.args[0]) - 1
+    
+    if chat_id not in jogos_ativo or "quiz" not in jogos_ativo[chat_id]:
+        await update.message.reply_text("Nenhum quiz ativo!")
+        return
+    
+    quiz = jogos_ativo[chat_id]["quiz"]
+    
+    if resposta == quiz["correta"]:
+        pontos[user_id] = pontos.get(user_id, 0) + 20
+        await update.message.reply_text(f"✅ Correto, {nome}! +20 pontos")
+    else:
+        await update.message.reply_text(f"❌ Errado, {nome}. A resposta correta era: {quiz['opcoes'][quiz['correta']]}")
+    
+    # Remover quiz
+    del jogos_ativo[chat_id]["quiz"]
+
+# Ajuda
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = """🤖 COMANDOS DISPONÍVEIS:
+
+🎮 GAMIFICAÇÃO:
+/perfil - Seu perfil e badges
+/rank - Ranking de pontos
+/checkin - Check-in diário (+10 pts)
+/missoes - Ver missões ativas
+/completar <num> - Completar missão
+/quiz - Quiz interativo (+20 pts)
+/resposta <num> - Responder quiz
 
 📊 ESTATÍSTICAS:
 /top - Ranking de mensagens
 
 🎉 SORTEIOS:
-/sorteio <prêmio> - Criar sorteio
+/sorteio - Criar sorteio
 /entrar - Entrar no sorteio
 /sortear - Escolher vencedor
 
-📅 EVENTOS:
-/evento <data> <descrição> - Criar evento
-/agenda - Ver eventos
-
 📊 ENQUETES:
-/poll <pergunta> <op1> <op2> - Criar enquete
+/poll - Criar enquete
 /voto <número> - Votar
 /resultado - Ver resultado
-
-🎮 JOGOS:
-/dado - Rolar dado
-/moeda - Cara ou coroa
-/jogo - Jogo de adivinhação
-/num <número> - Tentar adivinhar
 
 🎯 UTILIDADES:
 /random - Escolher pessoa aleatória
 /frase - Frase motivacional
-/piada - Piada aleatória
-/calc <dia> <mês> <ano> - Calcular idade
 /aviso <min> <msg> - Criar lembrete
-/magic - Resposta mágica
+
+🛠️ ADMIN:
+/missao <título> <pts> <desc> - Criar missão
 
 /help - Ver comandos"""
     
@@ -342,51 +492,37 @@ def main():
 
     # Handlers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contar))
+    
     # Comandos principais
     app.add_handler(CommandHandler("top", ranking))
-    app.add_handler(CommandHandler("ranking", ranking))  # Mantém o antigo
     
     # Sorteios
     app.add_handler(CommandHandler("sorteio", sorteio))
     app.add_handler(CommandHandler("entrar", participar))
-    app.add_handler(CommandHandler("participar", participar))  # Mantém o antigo
     app.add_handler(CommandHandler("sortear", sortear))
     
-    # Eventos
-    app.add_handler(CommandHandler("evento", evento))
-    app.add_handler(CommandHandler("agenda", eventos_lista))
-    app.add_handler(CommandHandler("eventos", eventos_lista))  # Mantém o antigo
-    
     # Enquetes
-    app.add_handler(CommandHandler("poll", enquete))
-    app.add_handler(CommandHandler("enquete", enquete))  # Mantém o antigo
+    app.add_handler(CommandHandler("poll", poll))
     app.add_handler(CommandHandler("voto", votar))
-    app.add_handler(CommandHandler("votar", votar))  # Mantém o antigo
     app.add_handler(CommandHandler("resultado", resultado))
-    
-    # Jogos
-    app.add_handler(CommandHandler("dado", dado))
-    app.add_handler(CommandHandler("moeda", moeda))
-    app.add_handler(CommandHandler("jogo", adivinhar))
-    app.add_handler(CommandHandler("adivinhar", adivinhar))  # Mantém o antigo
-    app.add_handler(CommandHandler("num", tentar))
-    app.add_handler(CommandHandler("tentar", tentar))  # Mantém o antigo
     
     # Utilidades
     app.add_handler(CommandHandler("random", escolher))
-    app.add_handler(CommandHandler("escolher", escolher))  # Mantém o antigo
     app.add_handler(CommandHandler("frase", frase))
-    app.add_handler(CommandHandler("piada", piada))
-    app.add_handler(CommandHandler("calc", idade))
-    app.add_handler(CommandHandler("idade", idade))  # Mantém o antigo
     app.add_handler(CommandHandler("aviso", lembrete))
-    app.add_handler(CommandHandler("lembrete", lembrete))  # Mantém o antigo
-    app.add_handler(CommandHandler("magic", pergunta))
-    app.add_handler(CommandHandler("pergunta", pergunta))  # Mantém o antigo
+    
+    # Gamificação
+    app.add_handler(CommandHandler("perfil", perfil))
+    app.add_handler(CommandHandler("rank", rank_pontos))
+    app.add_handler(CommandHandler("checkin", checkin))
+    app.add_handler(CommandHandler("missoes", ver_missoes))
+    app.add_handler(CommandHandler("missao", criar_missao))
+    app.add_handler(CommandHandler("completar", completar_missao))
+    app.add_handler(CommandHandler("quiz", quiz))
+    app.add_handler(CommandHandler("resposta", responder_quiz))
     
     # Ajuda
     app.add_handler(CommandHandler("help", ajuda))
-    app.add_handler(CommandHandler("ajuda", ajuda))  # Mantém o antigo
     app.add_handler(CommandHandler("start", ajuda))
 
     print("Bot rodando...")
