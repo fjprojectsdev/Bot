@@ -5,7 +5,7 @@ import datetime
 import logging
 
 # Configuração
-ADMIN_ID = 6670325989  # @FlavioJhonatan
+ADMIN_IDS = [6670325989, 7645992176]  # @FlavioJhonatan, @RareG_14
 
 # Log
 logging.basicConfig(level=logging.INFO)
@@ -56,7 +56,11 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Verificar se é flood
         if verificar_flood(user_id, update.message.text):
-            await update.message.reply_text("⚠️ Calma aí! Evite flood no grupo. 😅")
+            idioma = detectar_idioma(update.message.text)
+            if idioma == 'pt':
+                await update.message.reply_text("⚠️ Calma aí! Evite flood no grupo. 😅")
+            else:
+                await update.message.reply_text("⚠️ Slow down! Avoid flooding the group. 😅")
             return  # Não conta mensagem de flood
         
         contagem[user_id]["mensagens"] += 1
@@ -65,13 +69,88 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Verificar badges automáticos
         await verificar_badges(update, user_id)
 
+# Detectar idioma do usuário
+def detectar_idioma(texto):
+    palavras_pt = ['oi', 'olá', 'bom', 'dia', 'tarde', 'noite', 'obrigado', 'valeu', 'como', 'que', 'qual', 'onde', 'quando', 'por', 'que']
+    palavras_en = ['hi', 'hello', 'good', 'morning', 'afternoon', 'evening', 'thanks', 'thank', 'how', 'what', 'where', 'when', 'why']
+    
+    texto_lower = texto.lower()
+    pt_count = sum(1 for palavra in palavras_pt if palavra in texto_lower)
+    en_count = sum(1 for palavra in palavras_en if palavra in texto_lower)
+    
+    return 'pt' if pt_count > en_count else 'en'
+
+# Verificar se é flood (ajustado para 3 mensagens)
+def verificar_flood(user_id, texto):
+    agora = datetime.datetime.now()
+    
+    if user_id not in historico_mensagens:
+        historico_mensagens[user_id] = []
+    
+    # Limpar mensagens antigas (últimos 1 minuto)
+    historico_mensagens[user_id] = [
+        timestamp for timestamp in historico_mensagens[user_id]
+        if (agora - timestamp).total_seconds() < 60
+    ]
+    
+    # Verificar flood: mais de 3 mensagens em 1 min
+    if len(historico_mensagens[user_id]) >= 3:
+        return True
+    
+    # Adicionar timestamp atual
+    historico_mensagens[user_id].append(agora)
+    return False
+
+# Responder perguntas sobre Kenesis automaticamente
+async def responder_kenesis(update: Update):
+    texto = update.message.text.lower()
+    idioma = detectar_idioma(texto)
+    
+    # Respostas sobre Kenesis
+    if "kenesis" in texto and "?" in texto:
+        if idioma == 'pt':
+            await update.message.reply_text("🤖 Kenesis é uma plataforma Web3 que revoluciona a educação através de blockchain e IA. Criadores tokenizam conhecimento via NFT!")
+        else:
+            await update.message.reply_text("🤖 Kenesis is a Web3 platform that revolutionizes education through blockchain and AI. Creators tokenize knowledge via NFT!")
+        return
+    
+    if "web3" in texto and "?" in texto:
+        if idioma == 'pt':
+            await update.message.reply_text("🤖 Kenesis usa Web3 para criar um ecossistema educacional descentralizado, centrado no criador, com transparência e recompensas globais.")
+        else:
+            await update.message.reply_text("🤖 Kenesis uses Web3 to create a decentralized educational ecosystem, creator-centered, with transparency and global rewards.")
+        return
+    
+    if "missão" in texto or "mission" in texto and "?" in texto:
+        if idioma == 'pt':
+            await update.message.reply_text("🤖 A missão da Kenesis é transformar educação e pesquisa criando um ecossistema Web3 descentralizado que prioriza criadores.")
+        else:
+            await update.message.reply_text("🤖 Kenesis' mission is to transform education and research by creating a decentralized Web3 ecosystem that prioritizes creators.")
+        return
+    
+    if "nft" in texto and "?" in texto:
+        if idioma == 'pt':
+            await update.message.reply_text("🤖 Na Kenesis, criadores tokenizam seu conhecimento através de NFTs, criando um marketplace único de conteúdo educacional.")
+        else:
+            await update.message.reply_text("🤖 In Kenesis, creators tokenize their knowledge through NFTs, creating a unique marketplace for educational content.")
+        return
+    
+    # Saudações
+    if any(word in texto for word in ["oi", "olá", "bom dia", "boa tarde", "boa noite", "hi", "hello", "good morning", "good afternoon", "good evening"]):
+        if idioma == 'pt':
+            saudacoes = ["Olá! 👋 Bem-vindo à Kenesis!", "Oi! 🚀 Pronto para o futuro da educação?", "E aí! 💡 Vamos aprender juntos?"]
+        else:
+            saudacoes = ["Hello! 👋 Welcome to Kenesis!", "Hi! 🚀 Ready for the future of education?", "Hey! 💡 Let's learn together?"]
+        await update.message.reply_text(random.choice(saudacoes))
+        return
+
 # Comandos básicos
 async def ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not contagem:
-        await update.message.reply_text("Ainda não há mensagens!")
+        await update.message.reply_text("📊 No messages yet!")
         return
 
-    texto = "🏆 Ranking:\n\n"
+    texto = "🏆 Messages Ranking:\n\n"
     ordenado = sorted(contagem.values(), key=lambda x: x["mensagens"], reverse=True)
 
     for i, user in enumerate(ordenado[:5], start=1):
@@ -91,71 +170,20 @@ async def perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = pts // 100 + 1
     proximo_nivel = (nivel * 100) - pts
     
-    texto = f"👤 PERFIL DE {nome}\n\n"
-    texto += f"⭐ Nível: {nivel}\n"
-    texto += f"🎯 Pontos: {pts}\n"
-    texto += f"📈 Para próximo nível: {proximo_nivel} pontos\n"
-    texto += f"💬 Mensagens: {msgs}\n\n"
+    texto = f"👤 PROFILE OF {nome}\n\n"
+    texto += f"⭐ Level: {nivel}\n"
+    texto += f"🎯 Points: {pts}\n"
+    texto += f"📈 To next level: {proximo_nivel} points\n"
+    texto += f"💬 Messages: {msgs}\n\n"
     
     if user_badges:
         texto += "🏆 BADGES:\n"
         for badge in user_badges:
             texto += f"• {badge}\n"
     else:
-        texto += "🏆 Nenhum badge ainda\n"
+        texto += "🏆 No badges yet\n"
     
     await update.message.reply_text(texto)
-
-# Verificar se é flood
-def verificar_flood(user_id, texto):
-    agora = datetime.datetime.now()
-    
-    if user_id not in historico_mensagens:
-        historico_mensagens[user_id] = []
-    
-    # Limpar mensagens antigas (últimos 2 minutos)
-    historico_mensagens[user_id] = [
-        timestamp for timestamp in historico_mensagens[user_id]
-        if (agora - timestamp).total_seconds() < 120
-    ]
-    
-    # Verificar flood: mais de 5 mensagens em 2 min OU mensagem muito curta
-    if len(historico_mensagens[user_id]) >= 5:
-        return True
-    
-    if len(texto) < 10:  # Mensagem muito curta
-        return True
-    
-    # Adicionar timestamp atual
-    historico_mensagens[user_id].append(agora)
-    return False
-
-# Responder perguntas sobre Kenesis automaticamente
-async def responder_kenesis(update: Update):
-    texto = update.message.text.lower()
-    
-    # Respostas diretas
-    if "kenesis" in texto and "?" in texto:
-        await update.message.reply_text("🤖 Kenesis é uma plataforma Web3 que revoluciona a educação através de blockchain e IA. Criadores tokenizam conhecimento via NFT!")
-        return
-    
-    if "web3" in texto and "?" in texto:
-        await update.message.reply_text("🤖 Kenesis usa Web3 para criar um ecossistema educacional descentralizado, centrado no criador, com transparência e recompensas globais.")
-        return
-    
-    if "missão" in texto and "?" in texto:
-        await update.message.reply_text("🤖 A missão da Kenesis é transformar educação e pesquisa criando um ecossistema Web3 descentralizado que prioriza criadores.")
-        return
-    
-    if "nft" in texto and "?" in texto:
-        await update.message.reply_text("🤖 Na Kenesis, criadores tokenizam seu conhecimento através de NFTs, criando um marketplace único de conteúdo educacional.")
-        return
-    
-    # Saudações
-    if any(word in texto for word in ["oi", "olá", "bom dia", "boa tarde", "boa noite"]):
-        saudacoes = ["Olá! 👋 Bem-vindo à Kenesis!", "Oi! 🚀 Pronto para o futuro da educação?", "E aí! 💡 Vamos aprender juntos?"]
-        await update.message.reply_text(random.choice(saudacoes))
-        return
 
 async def kenesis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = """⌨️ Kenesis - Future of Education
@@ -185,21 +213,21 @@ async def verificar_badges(update, user_id):
     user_badges = badges[user_id]
     
     # Badge de mensagens
-    if mensagens >= 50 and "Ativo" not in user_badges:
-        badges[user_id].append("Ativo")
+    if mensagens >= 50 and "Active" not in user_badges:
+        badges[user_id].append("Active")
         pontos[user_id] += 25
-        await update.message.reply_text(f"🏆 {nome} ganhou o badge 'Ativo' (+25 pontos!)")
+        await update.message.reply_text(f"🏆 {nome} earned the 'Active' badge (+25 points!)")
     
-    if mensagens >= 100 and "Tagarela" not in user_badges:
-        badges[user_id].append("Tagarela")
+    if mensagens >= 100 and "Talkative" not in user_badges:
+        badges[user_id].append("Talkative")
         pontos[user_id] += 50
-        await update.message.reply_text(f"🏆 {nome} ganhou o badge 'Tagarela' (+50 pontos!)")
+        await update.message.reply_text(f"🏆 {nome} earned the 'Talkative' badge (+50 points!)")
     
     # Badge de pontos
-    if pts >= 500 and "Veterano" not in user_badges:
-        badges[user_id].append("Veterano")
+    if pts >= 500 and "Veteran" not in user_badges:
+        badges[user_id].append("Veteran")
         pontos[user_id] += 100
-        await update.message.reply_text(f"🏆 {nome} ganhou o badge 'Veterano' (+100 pontos!)")
+        await update.message.reply_text(f"🏆 {nome} earned the 'Veteran' badge (+100 points!)")
 
 # Check-in diário
 async def checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -211,7 +239,7 @@ async def checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         check_ins[user_id] = {}
     
     if hoje in check_ins[user_id]:
-        await update.message.reply_text(f"✅ {nome}, você já fez check-in hoje!")
+        await update.message.reply_text(f"✅ {nome}, you already checked in today!")
         return
     
     # Fazer check-in
@@ -229,9 +257,9 @@ async def checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bonus = 20
         pontos[user_id] += bonus
     
-    texto = f"✅ Check-in realizado, {nome}!\n+10 pontos"
+    texto = f"✅ Check-in completed, {nome}!\n+10 points"
     if bonus > 0:
-        texto += f"\n🔥 Sequência de {sequencia} dias! +{bonus} pontos bônus!"
+        texto += f"\n🔥 {sequencia} days streak! +{bonus} bonus points!"
     
     await update.message.reply_text(texto)
 
@@ -255,59 +283,28 @@ def calcular_sequencia(user_id):
 # Ranking de pontos
 async def rank_pontos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not pontos:
-        await update.message.reply_text("Ainda não há pontos registrados!")
+        await update.message.reply_text("📊 No points registered yet!")
         return
     
     # Ordenar por pontos
-    ranking_texto = "🏆 RANKING DE PONTOS:\n\n"
+    ranking_texto = "🏆 POINTS RANKING:\n\n"
     ordenado = sorted(pontos.items(), key=lambda x: x[1], reverse=True)
     
     for i, (user_id, pts) in enumerate(ordenado[:10], start=1):
-        nome = contagem.get(user_id, {}).get("nome", "Usuário")
+        nome = contagem.get(user_id, {}).get("nome", "User")
         nivel = pts // 100 + 1
-        ranking_texto += f"{i}. {nome}: {pts} pts (Nv.{nivel})\n"
+        ranking_texto += f"{i}. {nome}: {pts} pts (Lv.{nivel})\n"
     
     await update.message.reply_text(ranking_texto)
 
-async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = """🤖 COMANDOS DISPONÍVEIS:
-
-🎮 GAMIFICAÇÃO:
-/perfil - Seu perfil e badges
-/checkin - Check-in diário (+10 pts)
-/rank - Ranking de pontos
-
-📊 ESTATÍSTICAS:
-/top - Ranking de mensagens
-/ranking_geral - Ranking completo
-
-🚀 KENESIS:
-/kenesis - Links das redes sociais
-
-🤖 IA ATIVA:
-- Pergunte "O que é Kenesis?"
-- Pergunte "Como funciona Web3?"
-- Pergunte "Qual a missão?"
-- Diga "Oi" para saudação
-
-🛠️ ADMIN:
-/add_referrals @user qtd
-/add_points @user qtd
-/reset_month
-/announce_prizes
-
-/help - Ver comandos"""
-    
-    await update.message.reply_text(texto)
-
 # Funções auxiliares
 def is_admin(user_id):
-    return user_id == ADMIN_ID
+    return user_id in ADMIN_IDS
 
-# Adicionar referrals (admin)
+# Add referrals (admin)
 async def add_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ Apenas admin pode usar este comando.")
+        await update.message.reply_text("❌ Only admin can use this command.")
         return
     
     try:
@@ -318,14 +315,32 @@ async def add_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
             users[username] = {"referrals": 0, "points": 0}
         
         users[username]["referrals"] += amount
-        await update.message.reply_text(f"✅ Adicionado {amount} referrals para {username}.")
+        await update.message.reply_text(f"✅ Added {amount} referrals to {username}.")
     except:
-        await update.message.reply_text("⚠️ Uso: /add_referrals @username quantidade")
+        await update.message.reply_text("⚠️ Usage: /addrefs @username amount")
 
-# Adicionar pontos (admin)
+# Remove referrals (admin)
+async def remove_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    try:
+        username = context.args[0]
+        amount = int(context.args[1])
+        
+        if username not in users:
+            users[username] = {"referrals": 0, "points": 0}
+        
+        users[username]["referrals"] = max(0, users[username]["referrals"] - amount)
+        await update.message.reply_text(f"✅ Removed {amount} referrals from {username}.")
+    except:
+        await update.message.reply_text("⚠️ Usage: /removerefs @username amount")
+
+# Add points (admin)
 async def add_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ Apenas admin pode usar este comando.")
+        await update.message.reply_text("❌ Only admin can use this command.")
         return
     
     try:
@@ -336,71 +351,96 @@ async def add_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             users[username] = {"referrals": 0, "points": 0}
         
         users[username]["points"] += amount
-        await update.message.reply_text(f"✅ Adicionado {amount} pontos para {username}.")
+        await update.message.reply_text(f"✅ Added {amount} points to {username}.")
     except:
-        await update.message.reply_text("⚠️ Uso: /add_points @username quantidade")
+        await update.message.reply_text("⚠️ Usage: /addpoints @username amount")
 
-# Ranking geral
+# General ranking
 async def ranking_geral(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not users:
-        await update.message.reply_text("📊 Ainda não há dados.")
+        await update.message.reply_text("📊 No data yet.")
         return
     
     sorted_users = sorted(users.items(), key=lambda x: (x[1]['points'] + x[1]['referrals']), reverse=True)
     
-    msg = "🏆 TOP MEMBROS:\n\n"
+    msg = "🏆 TOP MEMBERS:\n\n"
     for i, (username, data) in enumerate(sorted_users[:10], start=1):
         score = data['points'] + data['referrals']
         msg += f"{i}. {username} — {score} pts\n"
-        msg += f"   Referrals: {data['referrals']} | Pontos: {data['points']}\n\n"
+        msg += f"   Referrals: {data['referrals']} | Points: {data['points']}\n\n"
     
     await update.message.reply_text(msg)
 
-# Reset mensal (admin)
-async def reset_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ Apenas admin pode resetar.")
+# Referrals ranking
+async def referrals_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not users:
+        await update.message.reply_text("📊 No referral data yet.")
         return
     
-    users.clear()
-    await update.message.reply_text("♻️ Scores mensais resetados.")
-
-# Anunciar prêmios (admin)
-async def announce_prizes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ Apenas admin pode anunciar.")
-        return
+    sorted_users = sorted(users.items(), key=lambda x: x[1]['referrals'], reverse=True)
     
-    msg = (
-        "🎉 DISTRIBUIÇÃO DE PRÊMIOS:\n\n"
-        "🥇 Top 1: $500\n"
-        "🥈 Top 2: $300\n"
-        "🥉 Top 3: $200\n"
-        "🏆 Top 4-10: $50 cada\n\n"
-        "📊 Use /ranking_geral para ver posições!"
-    )
+    msg = "🔗 REFERRALS RANKING:\n\n"
+    for i, (username, data) in enumerate(sorted_users[:10], start=1):
+        if data['referrals'] > 0:
+            msg += f"{i}. {username} — {data['referrals']} referrals\n"
+    
+    if msg == "🔗 REFERRALS RANKING:\n\n":
+        msg += "No referrals yet."
     
     await update.message.reply_text(msg)
+
+async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texto = """🤖 AVAILABLE COMMANDS:
+
+🎮 GAMIFICATION:
+/profile - Your profile and badges
+/checkin - Daily check-in (+10 pts)
+/points - Points ranking
+
+📊 STATISTICS:
+/messages - Messages ranking
+/ranking - Complete ranking
+/refsrank - Referrals ranking
+
+🚀 KENESIS:
+/kenesis - Social media links
+
+🤖 AI ACTIVE:
+- Ask "What is Kenesis?"
+- Ask "How does Web3 work?"
+- Ask "What's the mission?"
+- Say "Hi" for greeting
+
+🛠️ ADMIN:
+/addrefs @user amount
+/removerefs @user amount
+/addpoints @user amount
+
+/help - View commands"""
+    
+    await update.message.reply_text(texto)
 
 def main():
     TOKEN = "8211453362:AAHnQJduTD4-UNYoeciAAJTTjK3yB6ZC5oM"
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contar))
-    app.add_handler(CommandHandler("top", ranking))
-    app.add_handler(CommandHandler("perfil", perfil))
+    
+    # Commands in English
+    app.add_handler(CommandHandler("messages", ranking))
+    app.add_handler(CommandHandler("profile", perfil))
     app.add_handler(CommandHandler("checkin", checkin))
-    app.add_handler(CommandHandler("rank", rank_pontos))
+    app.add_handler(CommandHandler("points", rank_pontos))
     app.add_handler(CommandHandler("kenesis", kenesis))
     app.add_handler(CommandHandler("help", ajuda))
     app.add_handler(CommandHandler("start", ajuda))
     
-    # Sistema de referrals
-    app.add_handler(CommandHandler("add_referrals", add_referrals))
-    app.add_handler(CommandHandler("add_points", add_points_admin))
-    app.add_handler(CommandHandler("ranking_geral", ranking_geral))
-    app.add_handler(CommandHandler("reset_month", reset_month))
-    app.add_handler(CommandHandler("announce_prizes", announce_prizes))
+    # Referral system
+    app.add_handler(CommandHandler("addrefs", add_referrals))
+    app.add_handler(CommandHandler("removerefs", remove_referrals))
+    app.add_handler(CommandHandler("addpoints", add_points_admin))
+    app.add_handler(CommandHandler("ranking", ranking_geral))
+    app.add_handler(CommandHandler("refsrank", referrals_ranking))
 
     print("Bot rodando...")
     app.run_polling()
