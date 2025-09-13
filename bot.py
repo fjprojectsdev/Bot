@@ -5,7 +5,7 @@ import datetime
 import logging
 
 # Configuração
-ADMIN_IDS = [6670325989, 7645992176]  # @FlavioJhonatan, @RareG_14
+ADMIN_IDS = [6670325989, 7645992176, 8008129139]  # @FlavioJhonatan, @RareG_14, @Sinclair_Frost
 
 # Log
 logging.basicConfig(level=logging.INFO)
