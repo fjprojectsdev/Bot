@@ -82,6 +82,9 @@ def detectar_idioma(texto):
 
 # Verificar se é flood (ajustado para 3 mensagens)
 def verificar_flood(user_id, texto):
+    # TEMPORARIAMENTE DESABILITADO - Grupo bombando esta semana
+    return False
+    
     agora = datetime.datetime.now()
     
     if user_id not in historico_mensagens:
