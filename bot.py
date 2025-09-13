@@ -190,22 +190,27 @@ async def perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto)
 
 async def kenesis(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = """⌨️ Kenesis - Future of Education
+    texto = """KENESIS - Future of Education
 
-Kenesis is just getting started… Follow us on social media and be part of the future of education.
+Kenesis is revolutionizing education through Web3 technology. Follow us on social media and be part of the future of decentralized learning.
 
-📱 X: https://x.com/kenesis_io?s=21&t=iiRYsbGEbXUkxpvkzfIcDQ
-📱 TikTok: https://www.tiktok.com/@kenesis_io?_t=ZM-8zZ5xi8KaWM&_r=1
-📱 Threads: https://www.threads.com/@kenesis.io?igshid=NTc4MTIwNjQ2YQ==
-💡 Medium: https://medium.com/@kenesisofficial
-📱 Website: https://kenesis.io/
-📱 YouTube: https://www.youtube.com/@kenesis_io
-📱 LinkedIn: https://www.linkedin.com/company/kenesis-io/
-📱 Telegram: https://t.me/KenesisOfficial
-📱 Instagram: https://www.instagram.com/kenesis.io?igsh=NmRqdjNjZDR2c2g3&utm_source=qr
-📖 Whitepaper: https://kenesis.gitbook.io/whitepaper/
+SOCIAL MEDIA LINKS:
 
-🚀 Knowledge is no longer limited, it is technological, decentralized and no tracking."""
+X (Twitter): https://x.com/kenesis_io
+TikTok: https://www.tiktok.com/@kenesis_io
+Threads: https://www.threads.com/@kenesis.io
+Medium: https://medium.com/@kenesisofficial
+YouTube: https://www.youtube.com/@kenesis_io
+LinkedIn: https://www.linkedin.com/company/kenesis-io/
+Telegram: https://t.me/KenesisOfficial
+Instagram: https://www.instagram.com/kenesis.io
+
+OFFICIAL RESOURCES:
+
+Website: https://kenesis.io/
+Whitepaper: https://kenesis.gitbook.io/whitepaper/
+
+Knowledge is technological, decentralized and no tracking."""
     
     await update.message.reply_text(texto)
 
@@ -436,6 +441,7 @@ def main():
     app.add_handler(CommandHandler("checkin", checkin))
     app.add_handler(CommandHandler("points", rank_pontos))
     app.add_handler(CommandHandler("kenesis", kenesis))
+    app.add_handler(CommandHandler("links", kenesis))
     app.add_handler(CommandHandler("help", ajuda))
     app.add_handler(CommandHandler("start", ajuda))
     
