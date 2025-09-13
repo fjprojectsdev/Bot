@@ -21,6 +21,10 @@ historico_mensagens = {}
 # Sistema de referrals
 users = {}  # {username: {"referrals": int, "points": int}}
 
+# Sistema de punições
+avisos = {}  # {user_id: count}
+logs_admin = []  # Lista de eventos para logs
+
 # Base de conhecimento Kenesis
 kenesis_knowledge = {
     "kenesis": "Kenesis é uma plataforma Web3 que revoluciona a educação através de blockchain e IA. Criadores tokenizam conhecimento via NFT, aprendizes acessam conteúdo seguro em um marketplace transparente.",
@@ -56,11 +60,7 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Verificar se é flood
         if verificar_flood(user_id, update.message.text):
-            idioma = detectar_idioma(update.message.text)
-            if idioma == 'pt':
-                await update.message.reply_text("⚠️ Calma aí! Evite flood no grupo. 😅")
-            else:
-                await update.message.reply_text("⚠️ Slow down! Avoid flooding the group. 😅")
+            await aplicar_punicao(update, user_id)
             return  # Não conta mensagem de flood
         
         contagem[user_id]["mensagens"] += 1
@@ -165,10 +165,17 @@ async def ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     nome = update.effective_user.first_name
+    username = update.effective_user.username or nome
     
     msgs = contagem.get(user_id, {}).get("mensagens", 0)
     pts = pontos.get(user_id, 0)
     user_badges = badges.get(user_id, [])
+    
+    # Calcular check-ins
+    total_checkins = len(check_ins.get(user_id, {}))
+    
+    # Calcular convites (referrals)
+    convites = users.get(f"@{username}", {}).get("referrals", 0)
     
     # Calcular nível
     nivel = pts // 100 + 1
@@ -177,8 +184,11 @@ async def perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = f"👤 PROFILE OF {nome}\n\n"
     texto += f"⭐ Level: {nivel}\n"
     texto += f"🎯 Points: {pts}\n"
-    texto += f"📈 To next level: {proximo_nivel} points\n"
-    texto += f"💬 Messages: {msgs}\n\n"
+    texto += f"📈 To next level: {proximo_nivel} points\n\n"
+    texto += f"📊 PERSONAL STATS:\n"
+    texto += f"💬 Messages sent: {msgs}\n"
+    texto += f"✅ Check-ins completed: {total_checkins}\n"
+    texto += f"👥 Referrals made: {convites}\n\n"
     
     if user_badges:
         texto += "🏆 BADGES:\n"
@@ -186,6 +196,21 @@ async def perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             texto += f"• {badge}\n"
     else:
         texto += "🏆 No badges yet\n"
+    
+    await update.message.reply_text(texto)
+
+# Meus pontos
+async def meus_pontos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    pts = pontos.get(user_id, 0)
+    nivel = pts // 100 + 1
+    proximo_nivel = (nivel * 100) - pts
+    
+    texto = f"🎯 {nome}'s Points:\n\n"
+    texto += f"Current Points: {pts}\n"
+    texto += f"Level: {nivel}\n"
+    texto += f"Points to next level: {proximo_nivel}\n"
     
     await update.message.reply_text(texto)
 
@@ -403,6 +428,7 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🎮 GAMIFICATION:
 /profile - Your profile and badges
+/mypoints - Your current points
 /checkin - Daily check-in (+10 pts)
 /points - Points ranking
 
@@ -424,8 +450,70 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /addrefs @user amount
 /removerefs @user amount
 /addpoints @user amount
+/logs - View admin logs
 
 /help - View commands"""
+    
+    await update.message.reply_text(texto)
+
+# Sistema de punições
+async def aplicar_punicao(update: Update, user_id: int):
+    nome = update.effective_user.first_name
+    idioma = detectar_idioma(update.message.text)
+    
+    if user_id not in avisos:
+        avisos[user_id] = 0
+    
+    avisos[user_id] += 1
+    
+    if avisos[user_id] == 1:
+        if idioma == 'pt':
+            await update.message.reply_text(f"⚠️ {nome}, primeiro aviso! Evite flood no grupo.")
+        else:
+            await update.message.reply_text(f"⚠️ {nome}, first warning! Avoid flooding the group.")
+    
+    elif avisos[user_id] == 2:
+        pontos[user_id] = max(0, pontos.get(user_id, 0) - 10)
+        if idioma == 'pt':
+            await update.message.reply_text(f"⚠️ {nome}, segundo aviso! -10 pontos por spam.")
+        else:
+            await update.message.reply_text(f"⚠️ {nome}, second warning! -10 points for spam.")
+    
+    elif avisos[user_id] == 3:
+        pontos[user_id] = max(0, pontos.get(user_id, 0) - 25)
+        if idioma == 'pt':
+            await update.message.reply_text(f"⚠️ {nome}, terceiro aviso! -25 pontos. Próxima vez será removido.")
+        else:
+            await update.message.reply_text(f"⚠️ {nome}, third warning! -25 points. Next time you'll be removed.")
+    
+    else:
+        try:
+            await update.effective_chat.ban_chat_member(user_id)
+            if idioma == 'pt':
+                await update.message.reply_text(f"🚫 {nome} foi removido do grupo por spam repetido.")
+            else:
+                await update.message.reply_text(f"🚫 {nome} has been removed from the group for repeated spam.")
+            
+            logs_admin.append(f"User {nome} ({user_id}) removed for spam - {datetime.datetime.now()}")
+        except:
+            if idioma == 'pt':
+                await update.message.reply_text(f"⚠️ {nome} deveria ser removido, mas o bot não tem permissão.")
+            else:
+                await update.message.reply_text(f"⚠️ {nome} should be removed, but bot lacks permission.")
+
+# Admin tools
+async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    if not logs_admin:
+        await update.message.reply_text("📊 No admin logs yet.")
+        return
+    
+    texto = "📊 ADMIN LOGS (Last 10):\n\n"
+    for log in logs_admin[-10:]:
+        texto += f"• {log}\n"
     
     await update.message.reply_text(texto)
 
@@ -451,6 +539,8 @@ def main():
     app.add_handler(CommandHandler("addpoints", add_points_admin))
     app.add_handler(CommandHandler("ranking", ranking_geral))
     app.add_handler(CommandHandler("refsrank", referrals_ranking))
+    app.add_handler(CommandHandler("mypoints", meus_pontos))
+    app.add_handler(CommandHandler("logs", logs))
 
     print("Bot rodando...")
     app.run_polling()
