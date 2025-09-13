@@ -106,7 +106,20 @@ async def responder_kenesis(update: Update):
     texto = update.message.text.lower()
     idioma = detectar_idioma(texto)
     
-    # Respostas sobre Kenesis
+    # Saudações específicas
+    saudacoes_pt = ["oi", "olá", "bom dia", "boa tarde", "boa noite"]
+    saudacoes_en = ["hi", "hello", "good morning", "good afternoon", "good evening"]
+    
+    # Verificar se é uma saudação exata
+    if any(saudacao == texto.strip() for saudacao in saudacoes_pt + saudacoes_en):
+        if idioma == 'pt':
+            saudacoes = ["Olá! 👋 Bem-vindo à Kenesis!", "Oi! 🚀 Pronto para o futuro da educação?", "E aí! 💡 Vamos aprender juntos?"]
+        else:
+            saudacoes = ["Hello! 👋 Welcome to Kenesis!", "Hi! 🚀 Ready for the future of education?", "Hey! 💡 Let's learn together?"]
+        await update.message.reply_text(random.choice(saudacoes))
+        return
+    
+    # Respostas sobre Kenesis (apenas com pergunta)
     if "kenesis" in texto and "?" in texto:
         if idioma == 'pt':
             await update.message.reply_text("🤖 Kenesis é uma plataforma Web3 que revoluciona a educação através de blockchain e IA. Criadores tokenizam conhecimento via NFT!")
@@ -121,7 +134,7 @@ async def responder_kenesis(update: Update):
             await update.message.reply_text("🤖 Kenesis uses Web3 to create a decentralized educational ecosystem, creator-centered, with transparency and global rewards.")
         return
     
-    if "missão" in texto or "mission" in texto and "?" in texto:
+    if ("missão" in texto or "mission" in texto) and "?" in texto:
         if idioma == 'pt':
             await update.message.reply_text("🤖 A missão da Kenesis é transformar educação e pesquisa criando um ecossistema Web3 descentralizado que prioriza criadores.")
         else:
@@ -133,15 +146,6 @@ async def responder_kenesis(update: Update):
             await update.message.reply_text("🤖 Na Kenesis, criadores tokenizam seu conhecimento através de NFTs, criando um marketplace único de conteúdo educacional.")
         else:
             await update.message.reply_text("🤖 In Kenesis, creators tokenize their knowledge through NFTs, creating a unique marketplace for educational content.")
-        return
-    
-    # Saudações
-    if any(word in texto for word in ["oi", "olá", "bom dia", "boa tarde", "boa noite", "hi", "hello", "good morning", "good afternoon", "good evening"]):
-        if idioma == 'pt':
-            saudacoes = ["Olá! 👋 Bem-vindo à Kenesis!", "Oi! 🚀 Pronto para o futuro da educação?", "E aí! 💡 Vamos aprender juntos?"]
-        else:
-            saudacoes = ["Hello! 👋 Welcome to Kenesis!", "Hi! 🚀 Ready for the future of education?", "Hey! 💡 Let's learn together?"]
-        await update.message.reply_text(random.choice(saudacoes))
         return
 
 # Comandos básicos
