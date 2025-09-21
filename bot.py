@@ -3,6 +3,7 @@ from telegram.ext import Application, MessageHandler, CommandHandler, filters, C
 import random
 import datetime
 import logging
+import os
 
 # Configuração
 ADMIN_IDS = [6670325989, 7645992176, 8008129139]  # @FlavioJhonatan, @RareG_14, @Sinclair_Frost
@@ -41,11 +42,24 @@ kenesis_knowledge = {
     "criadores": "Na Kenesis, criadores podem tokenizar seu conhecimento, receber recompensas justas e participar de um programa de afiliados lucrativo."
 }
 
+# Palavras proibidas
+PALAVRAS_SPAM = ['airdrop', 'foxy', 'oxy loyal', 'privado', 'ao vivo', 'não perca', 'chance']
+
 # Função básica
 async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user:
         user_id = update.effective_user.id
         nome = update.effective_user.first_name
+        texto = update.message.text.lower()
+
+        # Verificar spam de airdrop
+        if any(palavra in texto for palavra in PALAVRAS_SPAM):
+            try:
+                await update.message.delete()
+                await update.message.reply_text(f"⚠️ {nome}, mensagem removida por conter spam de airdrop.")
+                return
+            except:
+                pass
 
         if user_id not in contagem:
             contagem[user_id] = {"nome": nome, "mensagens": 0}
@@ -353,6 +367,7 @@ async def add_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         users[username]["referrals"] += amount
         await update.message.reply_text(f"✅ Added {amount} referrals to {username}.")
+        logs_admin.append(f"Admin added {amount} referrals to {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     except:
         await update.message.reply_text("⚠️ Usage: /addrefs @username amount")
 
@@ -371,8 +386,28 @@ async def remove_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         users[username]["referrals"] = max(0, users[username]["referrals"] - amount)
         await update.message.reply_text(f"✅ Removed {amount} referrals from {username}.")
+        logs_admin.append(f"Admin removed {amount} referrals from {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     except:
         await update.message.reply_text("⚠️ Usage: /removerefs @username amount")
+
+# Delete referrals (admin)
+async def delete_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    try:
+        username = context.args[0]
+        
+        if username in users:
+            old_refs = users[username]["referrals"]
+            users[username]["referrals"] = 0
+            await update.message.reply_text(f"✅ Deleted all referrals from {username} ({old_refs} removed).")
+            logs_admin.append(f"Admin deleted all referrals from {username} ({old_refs}) - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            await update.message.reply_text(f"❌ User {username} not found.")
+    except:
+        await update.message.reply_text("⚠️ Usage: /delrefs @username")
 
 # Add points (admin)
 async def add_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -389,8 +424,47 @@ async def add_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         users[username]["points"] += amount
         await update.message.reply_text(f"✅ Added {amount} points to {username}.")
+        logs_admin.append(f"Admin added {amount} points to {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     except:
         await update.message.reply_text("⚠️ Usage: /addpoints @username amount")
+
+# Remove points (admin)
+async def remove_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    try:
+        username = context.args[0]
+        amount = int(context.args[1])
+        
+        if username not in users:
+            users[username] = {"referrals": 0, "points": 0}
+        
+        users[username]["points"] = max(0, users[username]["points"] - amount)
+        await update.message.reply_text(f"✅ Removed {amount} points from {username}.")
+        logs_admin.append(f"Admin removed {amount} points from {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    except:
+        await update.message.reply_text("⚠️ Usage: /removepoints @username amount")
+
+# Delete points (admin)
+async def delete_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    try:
+        username = context.args[0]
+        
+        if username in users:
+            old_points = users[username]["points"]
+            users[username]["points"] = 0
+            await update.message.reply_text(f"✅ Deleted all points from {username} ({old_points} removed).")
+            logs_admin.append(f"Admin deleted all points from {username} ({old_points}) - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            await update.message.reply_text(f"❌ User {username} not found.")
+    except:
+        await update.message.reply_text("⚠️ Usage: /delpoints @username")
 
 # General ranking
 async def ranking_geral(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -427,6 +501,8 @@ async def referrals_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
     texto = """🤖 AVAILABLE COMMANDS:
 
 🎮 GAMIFICATION:
@@ -449,13 +525,19 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - Ask "What's the mission?"
 - Say "Hi" for greeting
 
-🛠️ ADMIN:
-/addrefs @user amount
-/removerefs @user amount
-/addpoints @user amount
-/logs - View admin logs
-
 /help - View commands"""
+    
+    # Adicionar comandos admin apenas para admins
+    if is_admin(user_id):
+        texto += """\n\n🛠️ ADMIN COMMANDS:
+/addrefs @user amount - Add referrals
+/removerefs @user amount - Remove referrals
+/delrefs @user - Delete all referrals
+/addpoints @user amount - Add points
+/removepoints @user amount - Remove points
+/delpoints @user - Delete all points
+/clear - Clear spam messages
+/logs - View admin logs"""
     
     await update.message.reply_text(texto)
 
@@ -497,7 +579,7 @@ async def aplicar_punicao(update: Update, user_id: int):
             else:
                 await update.message.reply_text(f"🚫 {nome} has been removed from the group for repeated spam.")
             
-            logs_admin.append(f"User {nome} ({user_id}) removed for spam - {datetime.datetime.now()}")
+            logs_admin.append(f"User {nome} ({user_id}) removed for spam - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         except:
             if idioma == 'pt':
                 await update.message.reply_text(f"⚠️ {nome} deveria ser removido, mas o bot não tem permissão.")
@@ -518,10 +600,37 @@ async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for log in logs_admin[-10:]:
         texto += f"• {log}\n"
     
-    await update.message.reply_text(texto)
+    # Dividir mensagem se muito longa
+    if len(texto) > 4000:
+        await update.message.reply_text(texto[:4000] + "...")
+    else:
+        await update.message.reply_text(texto)
+
+# Limpar mensagens de spam (admin)
+async def clear_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    try:
+        chat_id = update.effective_chat.id
+        message_id = update.message.message_id
+        
+        deleted = 0
+        for i in range(1, 11):
+            try:
+                await context.bot.delete_message(chat_id, message_id - i)
+                deleted += 1
+            except:
+                continue
+        
+        await update.message.reply_text(f"✅ {deleted} mensagens removidas.")
+        logs_admin.append(f"Admin cleared {deleted} spam messages - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
 
 def main():
-    TOKEN = "8211453362:AAHnQJduTD4-UNYoeciAAJTTjK3yB6ZC5oM"
+    TOKEN = os.getenv('BOT_TOKEN', '8211453362:AAHJfblRYpJjh63dWQlnGGjsZHWXGiwmCKs')
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contar))
@@ -539,11 +648,15 @@ def main():
     # Referral system
     app.add_handler(CommandHandler("addrefs", add_referrals))
     app.add_handler(CommandHandler("removerefs", remove_referrals))
+    app.add_handler(CommandHandler("delrefs", delete_referrals))
     app.add_handler(CommandHandler("addpoints", add_points_admin))
+    app.add_handler(CommandHandler("removepoints", remove_points_admin))
+    app.add_handler(CommandHandler("delpoints", delete_points_admin))
     app.add_handler(CommandHandler("ranking", ranking_geral))
     app.add_handler(CommandHandler("refsrank", referrals_ranking))
     app.add_handler(CommandHandler("mypoints", meus_pontos))
     app.add_handler(CommandHandler("logs", logs))
+    app.add_handler(CommandHandler("clear", clear_spam))
 
     print("Bot rodando...")
     app.run_polling()
