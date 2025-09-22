@@ -78,12 +78,7 @@ async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Erro na IA: {e}")
     
-    # Verificar se é flood (atualmente desabilitado)
-    if verificar_flood(user_id, update.message.text):
-        await aplicar_punicao(update, user_id)
-        return  # Não conta mensagem de flood
-    
-    # SEMPRE contar a mensagem
+    # SEMPRE contar a mensagem (flood desabilitado)
     contagem[user_id]["mensagens"] += 1
     pontos[user_id] += 1
     
