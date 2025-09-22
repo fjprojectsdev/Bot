@@ -362,11 +362,17 @@ async def add_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = context.args[0]
         amount = int(context.args[1])
         
+        # Garantir que o usuário existe no sistema
         if username not in users:
             users[username] = {"referrals": 0, "points": 0}
         
         users[username]["referrals"] += amount
-        await update.message.reply_text(f"✅ Added {amount} referrals to {username}.")
+        
+        # Confirmação com posição atual no ranking
+        sorted_users = sorted(users.items(), key=lambda x: x[1]['referrals'], reverse=True)
+        position = next((i+1 for i, (user, _) in enumerate(sorted_users) if user == username), "N/A")
+        
+        await update.message.reply_text(f"✅ Added {amount} referrals to {username}.\n🏆 Current position in referrals ranking: #{position}")
         logs_admin.append(f"Admin added {amount} referrals to {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     except:
         await update.message.reply_text("⚠️ Usage: /addrefs @username amount")
@@ -475,7 +481,7 @@ async def ranking_geral(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sorted_users = sorted(users.items(), key=lambda x: (x[1]['points'] + x[1]['referrals']), reverse=True)
     
     msg = "🏆 TOP MEMBERS:\n\n"
-    for i, (username, data) in enumerate(sorted_users[:10], start=1):
+    for i, (username, data) in enumerate(sorted_users, start=1):
         score = data['points'] + data['referrals']
         msg += f"{i}. {username} — {score} pts\n"
         msg += f"   Referrals: {data['referrals']} | Points: {data['points']}\n\n"
@@ -488,15 +494,17 @@ async def referrals_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📊 No referral data yet.")
         return
     
+    # Ordenar todos os usuários por referrals (incluindo os com 0)
     sorted_users = sorted(users.items(), key=lambda x: x[1]['referrals'], reverse=True)
     
     msg = "🔗 REFERRALS RANKING:\n\n"
-    for i, (username, data) in enumerate(sorted_users[:10], start=1):
-        if data['referrals'] > 0:
-            msg += f"{i}. {username} — {data['referrals']} referrals\n"
+    count = 0
+    for username, data in sorted_users:
+        count += 1
+        msg += f"{count}. {username} — {data['referrals']} referrals\n"
     
-    if msg == "🔗 REFERRALS RANKING:\n\n":
-        msg += "No referrals yet."
+    if count == 0:
+        msg += "No users registered yet."
     
     await update.message.reply_text(msg)
 
@@ -536,6 +544,7 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /addpoints @user amount - Add points
 /removepoints @user amount - Remove points
 /delpoints @user - Delete all points
+/checkuser @user - Check user ranking position
 /clear - Clear spam messages
 /logs - View admin logs"""
     
@@ -629,6 +638,42 @@ async def clear_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
 
+# Verificar posição de usuário específico (admin)
+async def check_user_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    try:
+        username = context.args[0]
+        
+        if username not in users:
+            await update.message.reply_text(f"❌ User {username} not found in database.")
+            return
+        
+        user_data = users[username]
+        
+        # Posição no ranking de referrals
+        sorted_refs = sorted(users.items(), key=lambda x: x[1]['referrals'], reverse=True)
+        ref_position = next((i+1 for i, (user, _) in enumerate(sorted_refs) if user == username), "N/A")
+        
+        # Posição no ranking geral
+        sorted_general = sorted(users.items(), key=lambda x: (x[1]['points'] + x[1]['referrals']), reverse=True)
+        general_position = next((i+1 for i, (user, _) in enumerate(sorted_general) if user == username), "N/A")
+        
+        msg = f"🔍 USER CHECK: {username}\n\n"
+        msg += f"🔗 Referrals: {user_data['referrals']}\n"
+        msg += f"🎯 Points: {user_data['points']}\n"
+        msg += f"🏆 Total Score: {user_data['points'] + user_data['referrals']}\n\n"
+        msg += f"🏅 RANKINGS:\n"
+        msg += f"Referrals Rank: #{ref_position}\n"
+        msg += f"General Rank: #{general_position}"
+        
+        await update.message.reply_text(msg)
+        
+    except:
+        await update.message.reply_text("⚠️ Usage: /checkuser @username")
+
 def main():
     TOKEN = os.getenv('BOT_TOKEN', '8211453362:AAHJfblRYpJjh63dWQlnGGjsZHWXGiwmCKs')
     app = Application.builder().token(TOKEN).build()
@@ -657,6 +702,7 @@ def main():
     app.add_handler(CommandHandler("mypoints", meus_pontos))
     app.add_handler(CommandHandler("logs", logs))
     app.add_handler(CommandHandler("clear", clear_spam))
+    app.add_handler(CommandHandler("checkuser", check_user_ranking))
 
     print("Bot rodando...")
     app.run_polling()
