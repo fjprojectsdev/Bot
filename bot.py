@@ -4,6 +4,7 @@ import random
 import datetime
 import logging
 import os
+import io
 
 # Configuração
 ADMIN_IDS = [6670325989, 7645992176, 8008129139]  # @FlavioJhonatan, @RareG_14, @Sinclair_Frost
@@ -352,30 +353,46 @@ async def rank_pontos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def is_admin(user_id):
     return user_id in ADMIN_IDS
 
-# Add referrals (admin)
+# Add referrals (admin) - Suporta múltiplos usuários
 async def add_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("❌ Only admin can use this command.")
         return
     
+    if len(context.args) < 2:
+        await update.message.reply_text("⚠️ Usage: /addrefs @username amount [or multiple: @user1 amount1 @user2 amount2]")
+        return
+    
     try:
-        username = context.args[0]
-        amount = int(context.args[1])
+        results = []
+        args = context.args
         
-        # Garantir que o usuário existe no sistema
-        if username not in users:
-            users[username] = {"referrals": 0, "points": 0}
+        # Processar argumentos em pares (username, amount)
+        for i in range(0, len(args), 2):
+            if i + 1 >= len(args):
+                break
+                
+            username = args[i]
+            amount = int(args[i + 1])
+            
+            # Garantir que o usuário existe no sistema
+            if username not in users:
+                users[username] = {"referrals": 0, "points": 0}
+            
+            users[username]["referrals"] += amount
+            results.append(f"✅ {username}: +{amount} referrals")
+            logs_admin.append(f"Admin added {amount} referrals to {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
-        users[username]["referrals"] += amount
+        # Resposta consolidada
+        response = "📊 REFERRALS ADDED:\n\n" + "\n".join(results)
+        response += f"\n\n🏆 Use /refsrank to see updated ranking"
         
-        # Confirmação com posição atual no ranking
-        sorted_users = sorted(users.items(), key=lambda x: x[1]['referrals'], reverse=True)
-        position = next((i+1 for i, (user, _) in enumerate(sorted_users) if user == username), "N/A")
+        await update.message.reply_text(response)
         
-        await update.message.reply_text(f"✅ Added {amount} referrals to {username}.\n🏆 Current position in referrals ranking: #{position}")
-        logs_admin.append(f"Admin added {amount} referrals to {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    except:
-        await update.message.reply_text("⚠️ Usage: /addrefs @username amount")
+    except ValueError:
+        await update.message.reply_text("⚠️ Error: Make sure amounts are valid numbers")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Error processing command: {str(e)}")
 
 # Remove referrals (admin)
 async def remove_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -538,7 +555,8 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Adicionar comandos admin apenas para admins
     if is_admin(user_id):
         texto += """\n\n🛠️ ADMIN COMMANDS:
-/addrefs @user amount - Add referrals
+/addrefs @user amount - Add referrals (supports multiple)
+/importrefs - Bulk import (multiline format)
 /removerefs @user amount - Remove referrals
 /delrefs @user - Delete all referrals
 /addpoints @user amount - Add points
@@ -546,7 +564,12 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /delpoints @user - Delete all points
 /checkuser @user - Check user ranking position
 /clear - Clear spam messages
-/logs - View admin logs"""
+/logs - View admin logs
+
+📁 FILE IMPORT:
+Send 'refs.txt' or 'refs.csv' file with format:
+@user1,5
+@user2,3"""
     
     await update.message.reply_text(texto)
 
@@ -638,6 +661,139 @@ async def clear_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
 
+# Importação em lote de referrals
+async def import_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    # Obter o texto da mensagem após o comando
+    message_text = update.message.text
+    lines = message_text.split('\n')[1:]  # Pular a primeira linha com o comando
+    
+    if not lines or all(not line.strip() for line in lines):
+        await update.message.reply_text("⚠️ Usage:\n/importrefs\n@user1 5\n@user2 3\n@user3 10")
+        return
+    
+    results = []
+    errors = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:  # Linha vazia para o loop
+            break
+            
+        try:
+            parts = line.split()
+            if len(parts) != 2:
+                errors.append(f"❌ Invalid format: {line}")
+                continue
+                
+            username = parts[0]
+            amount = int(parts[1])
+            
+            if username not in users:
+                users[username] = {"referrals": 0, "points": 0}
+            
+            users[username]["referrals"] += amount
+            results.append(f"✅ {username}: +{amount} referrals")
+            logs_admin.append(f"Admin imported {amount} referrals to {username} - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+        except ValueError:
+            errors.append(f"❌ Invalid number in: {line}")
+        except Exception as e:
+            errors.append(f"❌ Error in line '{line}': {str(e)}")
+    
+    # Resposta consolidada
+    response = f"📊 BULK IMPORT COMPLETED:\n\n"
+    if results:
+        response += "\n".join(results)
+    if errors:
+        response += "\n\n⚠️ ERRORS:\n" + "\n".join(errors)
+    
+    response += f"\n\n🏆 Total processed: {len(results)} users"
+    
+    await update.message.reply_text(response)
+
+# Processar arquivo de referrals
+async def process_referrals_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    
+    document = update.message.document
+    if not document:
+        return
+    
+    # Verificar se é um arquivo de referrals
+    filename = document.file_name.lower()
+    if not (filename == 'refs.txt' or filename == 'refs.csv' or 'refs' in filename):
+        return
+    
+    try:
+        # Baixar o arquivo
+        file = await context.bot.get_file(document.file_id)
+        file_content = await file.download_as_bytearray()
+        
+        # Decodificar o conteúdo
+        content = file_content.decode('utf-8')
+        lines = content.strip().split('\n')
+        
+        results = []
+        errors = []
+        
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line or line.startswith('#'):  # Pular linhas vazias e comentários
+                continue
+            
+            try:
+                # Suportar tanto vírgula quanto espaço como separador
+                if ',' in line:
+                    parts = line.split(',')
+                else:
+                    parts = line.split()
+                
+                if len(parts) != 2:
+                    errors.append(f"❌ Line {line_num}: Invalid format '{line}'")
+                    continue
+                
+                username = parts[0].strip()
+                amount = int(parts[1].strip())
+                
+                if username not in users:
+                    users[username] = {"referrals": 0, "points": 0}
+                
+                users[username]["referrals"] += amount
+                results.append(f"✅ {username}: +{amount} referrals")
+                logs_admin.append(f"Admin imported {amount} referrals to {username} from file - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                
+            except ValueError:
+                errors.append(f"❌ Line {line_num}: Invalid number in '{line}'")
+            except Exception as e:
+                errors.append(f"❌ Line {line_num}: Error in '{line}' - {str(e)}")
+        
+        # Resposta consolidada
+        response = f"📁 FILE IMPORT COMPLETED ({filename}):\n\n"
+        if results:
+            # Limitar a resposta se muitos resultados
+            if len(results) > 20:
+                response += "\n".join(results[:20])
+                response += f"\n... and {len(results) - 20} more users"
+            else:
+                response += "\n".join(results)
+        
+        if errors:
+            response += "\n\n⚠️ ERRORS:\n" + "\n".join(errors[:10])
+            if len(errors) > 10:
+                response += f"\n... and {len(errors) - 10} more errors"
+        
+        response += f"\n\n🏆 Total processed: {len(results)} users"
+        
+        await update.message.reply_text(response)
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error processing file: {str(e)}")
+
 # Verificar posição de usuário específico (admin)
 async def check_user_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -679,6 +835,7 @@ def main():
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contar))
+    app.add_handler(MessageHandler(filters.Document.ALL, process_referrals_file))
     
     # Commands in English
     app.add_handler(CommandHandler("messages", ranking))
@@ -703,6 +860,7 @@ def main():
     app.add_handler(CommandHandler("logs", logs))
     app.add_handler(CommandHandler("clear", clear_spam))
     app.add_handler(CommandHandler("checkuser", check_user_ranking))
+    app.add_handler(CommandHandler("importrefs", import_referrals))
 
     print("Bot rodando...")
     app.run_polling()
