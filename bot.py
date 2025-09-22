@@ -799,17 +799,11 @@ async def check_user_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE)
         sorted_refs = sorted(users.items(), key=lambda x: x[1]['referrals'], reverse=True)
         ref_position = next((i+1 for i, (user, _) in enumerate(sorted_refs) if user == username), "N/A")
         
-        # Posição no ranking geral
-        sorted_general = sorted(users.items(), key=lambda x: (x[1]['points'] + x[1]['referrals']), reverse=True)
-        general_position = next((i+1 for i, (user, _) in enumerate(sorted_general) if user == username), "N/A")
-        
         msg = f"🔍 USER CHECK: {username}\n\n"
         msg += f"🔗 Referrals: {user_data['referrals']}\n"
         msg += f"🎯 Points: {user_data['points']}\n"
         msg += f"🏆 Total Score: {user_data['points'] + user_data['referrals']}\n\n"
-        msg += f"🏅 RANKINGS:\n"
-        msg += f"Referrals Rank: #{ref_position}\n"
-        msg += f"General Rank: #{general_position}"
+        msg += f"🏅 Referrals Rank: #{ref_position}"
         
         await update.message.reply_text(msg)
         
