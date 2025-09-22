@@ -48,41 +48,50 @@ PALAVRAS_SPAM = ['airdrop', 'foxy', 'oxy loyal', 'privado', 'ao vivo', 'não per
 
 # Função básica
 async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user:
-        user_id = update.effective_user.id
-        nome = update.effective_user.first_name
-        texto = update.message.text.lower()
+    if not update.effective_user or not update.message or not update.message.text:
+        return
+        
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    texto = update.message.text.lower()
 
-        # Verificar spam de airdrop
-        if any(palavra in texto for palavra in PALAVRAS_SPAM):
-            try:
-                await update.message.delete()
-                await update.message.reply_text(f"⚠️ {nome}, mensagem removida por conter spam de airdrop.")
-                return
-            except:
-                pass
-
-        if user_id not in contagem:
-            contagem[user_id] = {"nome": nome, "mensagens": 0}
-            pontos[user_id] = 0
-            badges[user_id] = []
-
-        # Responder perguntas sobre Kenesis automaticamente (sempre)
+    # Verificar spam de airdrop
+    if any(palavra in texto for palavra in PALAVRAS_SPAM):
         try:
-            await responder_kenesis(update)
-        except Exception as e:
-            print(f"Erro na IA: {e}")
-        
-        # Verificar se é flood
-        if verificar_flood(user_id, update.message.text):
-            await aplicar_punicao(update, user_id)
-            return  # Não conta mensagem de flood
-        
-        contagem[user_id]["mensagens"] += 1
-        pontos[user_id] += 1
-        
-        # Verificar badges automáticos
-        await verificar_badges(update, user_id)
+            await update.message.delete()
+            await update.message.reply_text(f"⚠️ {nome}, mensagem removida por conter spam de airdrop.")
+            return
+        except:
+            pass
+
+    # Inicializar usuário se não existir
+    if user_id not in contagem:
+        contagem[user_id] = {"nome": nome, "mensagens": 0}
+    if user_id not in pontos:
+        pontos[user_id] = 0
+    if user_id not in badges:
+        badges[user_id] = []
+
+    # Responder perguntas sobre Kenesis automaticamente
+    try:
+        await responder_kenesis(update)
+    except Exception as e:
+        print(f"Erro na IA: {e}")
+    
+    # Verificar se é flood (atualmente desabilitado)
+    if verificar_flood(user_id, update.message.text):
+        await aplicar_punicao(update, user_id)
+        return  # Não conta mensagem de flood
+    
+    # SEMPRE contar a mensagem
+    contagem[user_id]["mensagens"] += 1
+    pontos[user_id] += 1
+    
+    # Atualizar nome se mudou
+    contagem[user_id]["nome"] = nome
+    
+    # Verificar badges automáticos
+    await verificar_badges(update, user_id)
 
 # Detectar idioma do usuário
 def detectar_idioma(texto):
@@ -95,28 +104,9 @@ def detectar_idioma(texto):
     
     return 'pt' if pt_count > en_count else 'en'
 
-# Verificar se é flood (ajustado para 3 mensagens)
+# Verificar se é flood (desabilitado)
 def verificar_flood(user_id, texto):
-    # TEMPORARIAMENTE DESABILITADO - Grupo bombando esta semana
-    return False
-    
-    agora = datetime.datetime.now()
-    
-    if user_id not in historico_mensagens:
-        historico_mensagens[user_id] = []
-    
-    # Limpar mensagens antigas (últimos 1 minuto)
-    historico_mensagens[user_id] = [
-        timestamp for timestamp in historico_mensagens[user_id]
-        if (agora - timestamp).total_seconds() < 60
-    ]
-    
-    # Verificar flood: mais de 3 mensagens em 1 min
-    if len(historico_mensagens[user_id]) >= 3:
-        return True
-    
-    # Adicionar timestamp atual
-    historico_mensagens[user_id].append(agora)
+    # Sistema de flood desabilitado para permitir contagem total
     return False
 
 # Responder perguntas sobre Kenesis automaticamente
@@ -563,6 +553,7 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /removepoints @user amount - Remove points
 /delpoints @user - Delete all points
 /checkuser @user - Check user ranking position
+/debug - Debug message counting
 /clear - Clear spam messages
 /logs - View admin logs
 
@@ -830,6 +821,30 @@ async def check_user_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except:
         await update.message.reply_text("⚠️ Usage: /checkuser @username")
 
+# Debug - Verificar contagem (admin)
+async def debug_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Only admin can use this command.")
+        return
+    
+    user_id = update.effective_user.id
+    nome = update.effective_user.first_name
+    
+    msg = f"🔍 DEBUG INFO:\n\n"
+    msg += f"Your User ID: {user_id}\n"
+    msg += f"Your Name: {nome}\n\n"
+    
+    if user_id in contagem:
+        msg += f"Messages in DB: {contagem[user_id]['mensagens']}\n"
+        msg += f"Points in DB: {pontos.get(user_id, 0)}\n"
+    else:
+        msg += "User not found in database\n"
+    
+    msg += f"\nTotal users in DB: {len(contagem)}\n"
+    msg += f"This message should increment your count by 1"
+    
+    await update.message.reply_text(msg)
+
 def main():
     TOKEN = os.getenv('BOT_TOKEN', '8211453362:AAHJfblRYpJjh63dWQlnGGjsZHWXGiwmCKs')
     app = Application.builder().token(TOKEN).build()
@@ -861,6 +876,7 @@ def main():
     app.add_handler(CommandHandler("clear", clear_spam))
     app.add_handler(CommandHandler("checkuser", check_user_ranking))
     app.add_handler(CommandHandler("importrefs", import_referrals))
+    app.add_handler(CommandHandler("debug", debug_count))
 
     print("Bot rodando...")
     app.run_polling()
