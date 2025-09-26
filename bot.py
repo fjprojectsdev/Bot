@@ -357,7 +357,7 @@ async def add_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if i + 1 >= len(args):
                 break
                 
-            username = args[i]
+            username = args[i].lower()
             amount = int(args[i + 1])
             
             # Garantir que o usuário existe no sistema
@@ -386,7 +386,7 @@ async def remove_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        username = context.args[0]
+        username = context.args[0].lower()
         amount = int(context.args[1])
         
         if username not in users:
@@ -405,7 +405,7 @@ async def delete_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        username = context.args[0]
+        username = context.args[0].lower()
         
         if username in users:
             old_refs = users[username]["referrals"]
@@ -424,7 +424,7 @@ async def add_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        username = context.args[0]
+        username = context.args[0].lower()
         amount = int(context.args[1])
         
         if username not in users:
@@ -443,7 +443,7 @@ async def remove_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        username = context.args[0]
+        username = context.args[0].lower()
         amount = int(context.args[1])
         
         if username not in users:
@@ -462,7 +462,7 @@ async def delete_points_admin(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        username = context.args[0]
+        username = context.args[0].lower()
         
         if username in users:
             old_points = users[username]["points"]
@@ -675,7 +675,7 @@ async def import_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 errors.append(f"❌ Invalid format: {line}")
                 continue
                 
-            username = parts[0]
+            username = parts[0].lower()
             amount = int(parts[1])
             
             if username not in users:
@@ -743,7 +743,7 @@ async def process_referrals_file(update: Update, context: ContextTypes.DEFAULT_T
                     errors.append(f"❌ Line {line_num}: Invalid format '{line}'")
                     continue
                 
-                username = parts[0].strip()
+                username = parts[0].strip().lower()
                 amount = int(parts[1].strip())
                 
                 if username not in users:
@@ -787,7 +787,7 @@ async def check_user_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     
     try:
-        username = context.args[0]
+        username = context.args[0].lower()
         
         if username not in users:
             await update.message.reply_text(f"❌ User {username} not found in database.")
