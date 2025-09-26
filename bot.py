@@ -48,44 +48,47 @@ PALAVRAS_SPAM = ['airdrop', 'foxy', 'oxy loyal', 'privado', 'ao vivo', 'não per
 
 # Função básica
 async def contar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or not update.message or not update.message.text:
+    # Verificar se é uma mensagem válida
+    if not update.effective_user or not update.message:
+        return
+    
+    # Pular comandos
+    if update.message.text and update.message.text.startswith('/'):
         return
         
     user_id = update.effective_user.id
-    nome = update.effective_user.first_name
-    texto = update.message.text.lower()
+    nome = update.effective_user.first_name or "User"
+    
+    # Verificar spam apenas se houver texto
+    if update.message.text:
+        texto = update.message.text.lower()
+        if any(palavra in texto for palavra in PALAVRAS_SPAM):
+            try:
+                await update.message.delete()
+                await update.message.reply_text(f"⚠️ {nome}, mensagem removida por conter spam de airdrop.")
+                return
+            except:
+                pass
 
-    # Verificar spam de airdrop
-    if any(palavra in texto for palavra in PALAVRAS_SPAM):
-        try:
-            await update.message.delete()
-            await update.message.reply_text(f"⚠️ {nome}, mensagem removida por conter spam de airdrop.")
-            return
-        except:
-            pass
-
-    # Inicializar usuário se não existir
+    # Inicializar usuário
     if user_id not in contagem:
         contagem[user_id] = {"nome": nome, "mensagens": 0}
-    if user_id not in pontos:
         pontos[user_id] = 0
-    if user_id not in badges:
         badges[user_id] = []
 
-    # Responder perguntas sobre Kenesis automaticamente
-    try:
-        await responder_kenesis(update)
-    except Exception as e:
-        print(f"Erro na IA: {e}")
-    
-    # SEMPRE contar a mensagem (flood desabilitado)
+    # Contar mensagem
     contagem[user_id]["mensagens"] += 1
     pontos[user_id] += 1
-    
-    # Atualizar nome se mudou
     contagem[user_id]["nome"] = nome
     
-    # Verificar badges automáticos
+    # Responder Kenesis apenas para mensagens de texto
+    if update.message.text:
+        try:
+            await responder_kenesis(update)
+        except Exception as e:
+            print(f"Erro na IA: {e}")
+    
+    # Verificar badges
     await verificar_badges(update, user_id)
 
 # Detectar idioma do usuário
@@ -838,7 +841,7 @@ def main():
     TOKEN = os.getenv('BOT_TOKEN', '8211453362:AAHJfblRYpJjh63dWQlnGGjsZHWXGiwmCKs')
     app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contar))
+    app.add_handler(MessageHandler(~filters.COMMAND, contar))
     app.add_handler(MessageHandler(filters.Document.ALL, process_referrals_file))
     
     # Commands in English
