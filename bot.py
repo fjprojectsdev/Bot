@@ -409,9 +409,9 @@ async def delete_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if username in users:
             old_refs = users[username]["referrals"]
-            users[username]["referrals"] = 0
-            await update.message.reply_text(f"✅ Deleted all referrals from {username} ({old_refs} removed).")
-            logs_admin.append(f"Admin deleted all referrals from {username} ({old_refs}) - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            del users[username]  # Remove o usuário completamente
+            await update.message.reply_text(f"✅ Deleted user {username} completely ({old_refs} referrals removed).")
+            logs_admin.append(f"Admin deleted user {username} completely ({old_refs} referrals) - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             await update.message.reply_text(f"❌ User {username} not found.")
     except:
